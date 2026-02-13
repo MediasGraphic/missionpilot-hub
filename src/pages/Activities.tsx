@@ -1,22 +1,27 @@
+import { useState } from "react";
 import Layout from "@/components/Layout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MessageSquare, Users, ClipboardList, CalendarDays, Plus, BarChart } from "lucide-react";
+import { EntityActions } from "@/components/EntityActions";
+import { SoftDeleteDialog } from "@/components/SoftDeleteDialog";
+import { useSoftDelete } from "@/hooks/useSoftDelete";
+import { toast } from "sonner";
 
-const events = [
-  { name: "Réunion publique #1", type: "Réunion", date: "15 jan 2026", participants: 45, project: "ZAC Centre", status: "Terminé" },
-  { name: "Atelier participatif – Mobilité douce", type: "Atelier", date: "22 fév 2026", participants: 28, project: "Mobilité Grand Ouest", status: "Terminé" },
-  { name: "Questionnaire en ligne habitants", type: "Enquête", date: "1-28 fév 2026", participants: 312, project: "Mobilité Grand Ouest", status: "En cours" },
-  { name: "Marche exploratoire centre-ville", type: "Terrain", date: "10 mar 2026", participants: 15, project: "PLUi Littoral", status: "Planifié" },
-  { name: "Réunion publique de restitution", type: "Réunion", date: "20 fév 2026", participants: 60, project: "ZAC Centre", status: "Planifié" },
+const eventsData = [
+  { id: "e1", name: "Réunion publique #1", type: "Réunion", date: "15 jan 2026", participants: 45, project: "ZAC Centre", status: "Terminé" },
+  { id: "e2", name: "Atelier participatif – Mobilité douce", type: "Atelier", date: "22 fév 2026", participants: 28, project: "Mobilité Grand Ouest", status: "Terminé" },
+  { id: "e3", name: "Questionnaire en ligne habitants", type: "Enquête", date: "1-28 fév 2026", participants: 312, project: "Mobilité Grand Ouest", status: "En cours" },
+  { id: "e4", name: "Marche exploratoire centre-ville", type: "Terrain", date: "10 mar 2026", participants: 15, project: "PLUi Littoral", status: "Planifié" },
+  { id: "e5", name: "Réunion publique de restitution", type: "Réunion", date: "20 fév 2026", participants: 60, project: "ZAC Centre", status: "Planifié" },
 ];
 
-const contributions = [
-  { channel: "Questionnaire en ligne", count: 312, themes: ["mobilité", "sécurité", "cadre de vie"] },
-  { channel: "Boîte à idées", count: 47, themes: ["espaces verts", "commerce", "logement"] },
-  { channel: "Registre papier", count: 23, themes: ["bruit", "circulation"] },
-  { channel: "Email / courrier", count: 15, themes: ["opposition projet", "information"] },
+const contributionsData = [
+  { id: "c1", channel: "Questionnaire en ligne", count: 312, themes: ["mobilité", "sécurité", "cadre de vie"] },
+  { id: "c2", channel: "Boîte à idées", count: 47, themes: ["espaces verts", "commerce", "logement"] },
+  { id: "c3", channel: "Registre papier", count: 23, themes: ["bruit", "circulation"] },
+  { id: "c4", channel: "Email / courrier", count: 15, themes: ["opposition projet", "information"] },
 ];
 
 const typeColors: Record<string, string> = {
@@ -27,6 +32,18 @@ const typeColors: Record<string, string> = {
 };
 
 export default function Activities() {
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string; type: string } | null>(null);
+  const { softDelete, isDeleted } = useSoftDelete();
+
+  const handleSoftDelete = () => {
+    if (!deleteTarget) return;
+    softDelete({ id: deleteTarget.id, name: deleteTarget.name, type: deleteTarget.type });
+    setDeleteTarget(null);
+  };
+
+  const visibleEvents = eventsData.filter((e) => !isDeleted(e.id));
+  const visibleContributions = contributionsData.filter((c) => !isDeleted(c.id));
+
   return (
     <Layout>
       <div className="animate-fade-in space-y-6">
@@ -58,16 +75,26 @@ export default function Activities() {
           </TabsList>
 
           <TabsContent value="events" className="mt-4 space-y-3">
-            {events.map((event, i) => (
-              <div key={i} className="glass-card p-4 hover:border-primary/20 transition-all cursor-pointer group animate-slide-up">
+            {visibleEvents.map((event) => (
+              <div key={event.id} className="glass-card p-4 hover:border-primary/20 transition-all cursor-pointer group animate-slide-up">
                 <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <h3 className="font-medium text-sm group-hover:text-primary transition-colors">{event.name}</h3>
                     <p className="text-muted-foreground text-xs mt-0.5">{event.project}</p>
                   </div>
-                  <Badge variant="secondary" className={`${typeColors[event.type]} border-0 shrink-0 text-[11px]`}>
-                    {event.type}
-                  </Badge>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <Badge variant="secondary" className={`${typeColors[event.type]} border-0 text-[11px]`}>
+                      {event.type}
+                    </Badge>
+                    <EntityActions
+                      entityName={event.name}
+                      onEdit={() => toast.info("Modifier : " + event.name)}
+                      onRename={() => toast.info("Renommer : " + event.name)}
+                      onDuplicate={() => toast.info("Dupliquer : " + event.name)}
+                      onArchive={() => toast.info("Archiver : " + event.name)}
+                      onDelete={() => setDeleteTarget({ id: event.id, name: event.name, type: "événement" })}
+                    />
+                  </div>
                 </div>
                 <div className="mt-3 flex items-center gap-4 text-xs text-muted-foreground">
                   <div className="flex items-center gap-1">
@@ -85,14 +112,19 @@ export default function Activities() {
           </TabsContent>
 
           <TabsContent value="contributions" className="mt-4 space-y-3">
-            {contributions.map((c, i) => (
-              <div key={i} className="glass-card p-4 animate-slide-up">
+            {visibleContributions.map((c) => (
+              <div key={c.id} className="glass-card p-4 animate-slide-up">
                 <div className="flex items-start justify-between gap-3">
-                  <div>
+                  <div className="flex-1">
                     <h3 className="font-medium text-sm">{c.channel}</h3>
                     <p className="text-primary font-heading text-2xl font-bold mt-1">{c.count}</p>
                     <p className="text-muted-foreground text-xs">contributions</p>
                   </div>
+                  <EntityActions
+                    entityName={c.channel}
+                    onEdit={() => toast.info("Modifier : " + c.channel)}
+                    onDelete={() => setDeleteTarget({ id: c.id, name: c.channel, type: "contribution" })}
+                  />
                 </div>
                 <div className="mt-3 flex gap-1.5 flex-wrap">
                   {c.themes.map((t) => (
@@ -111,6 +143,16 @@ export default function Activities() {
           </TabsContent>
         </Tabs>
       </div>
+
+      {deleteTarget && (
+        <SoftDeleteDialog
+          open={!!deleteTarget}
+          onOpenChange={(open) => !open && setDeleteTarget(null)}
+          entityName={deleteTarget.name}
+          entityType={`l'${deleteTarget.type}`}
+          onConfirm={handleSoftDelete}
+        />
+      )}
     </Layout>
   );
 }
