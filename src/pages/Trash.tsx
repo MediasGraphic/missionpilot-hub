@@ -23,8 +23,10 @@ import {
   GitCompare,
   ClipboardList,
   Users,
+  History,
+  CalendarRange,
 } from "lucide-react";
-import { HardDeleteDialog } from "@/components/HardDeleteDialog";
+import { HardDeleteDialog, type ImpactDetail } from "@/components/HardDeleteDialog";
 import { toast } from "sonner";
 
 interface TrashItem {
@@ -36,6 +38,19 @@ interface TrashItem {
   deletedAt: string;
   deletedBy: string;
   relatedCount: number;
+  /** Entity-specific impact details for hard delete */
+  impactDetails?: ImpactDetail[];
+  /** Extra warning for hard delete */
+  warningMessage?: string;
+  /** Block hard delete? */
+  blocked?: boolean;
+  blockedReason?: string;
+  /** Alternative action (e.g., "Désactiver" for KPI) */
+  alternativeLabel?: string;
+  /** Number of versions (for documents) */
+  versions?: number;
+  /** Is this the active schedule version? */
+  isActiveVersion?: boolean;
 }
 
 const typeIcons: Record<string, React.ElementType> = {
@@ -49,14 +64,62 @@ const typeIcons: Record<string, React.ElementType> = {
   "partie prenante": Users,
   rapport: FileText,
   tâche: ClipboardList,
+  "schedule-version": History,
 };
 
 const MOCK_TRASH: TrashItem[] = [
-  { id: "t1", name: "Rapport intermédiaire v1", type: "document", typeLabel: "Document", project: "Mobilité Grand Ouest", deletedAt: "2026-02-10T14:30:00", deletedBy: "Jean Martin", relatedCount: 0 },
-  { id: "t2", name: "KPI Taux d'engagement web", type: "kpi", typeLabel: "KPI", project: "PLUi Littoral", deletedAt: "2026-02-09T10:15:00", deletedBy: "Marie Durand", relatedCount: 0 },
-  { id: "t3", name: "Atelier participatif #3", type: "événement", typeLabel: "Événement", project: "ZAC Centre", deletedAt: "2026-02-08T16:45:00", deletedBy: "Sophie Leclerc", relatedCount: 2 },
-  { id: "t4", name: "Enquête terrain complémentaire", type: "tâche", typeLabel: "Tâche", project: "Mobilité Grand Ouest", deletedAt: "2026-02-07T09:00:00", deletedBy: "Jean Martin", relatedCount: 1 },
-  { id: "t5", name: "Exigence – Accessibilité PMR", type: "exigence", typeLabel: "Exigence", project: "PLUi Littoral", deletedAt: "2026-02-06T11:20:00", deletedBy: "Marie Durand", relatedCount: 3 },
+  {
+    id: "t1", name: "Rapport intermédiaire v1", type: "document", typeLabel: "Document",
+    project: "Mobilité Grand Ouest", deletedAt: "2026-02-10T14:30:00", deletedBy: "Jean Martin",
+    relatedCount: 0, versions: 3,
+    impactDetails: [{ label: "versions", count: 3 }],
+    warningMessage: "3 versions de ce document seront définitivement perdues.",
+  },
+  {
+    id: "t2", name: "KPI Taux d'engagement web", type: "kpi", typeLabel: "KPI",
+    project: "PLUi Littoral", deletedAt: "2026-02-09T10:15:00", deletedBy: "Marie Durand",
+    relatedCount: 0,
+    impactDetails: [{ label: "dashboards", count: 2 }, { label: "rapports", count: 1 }],
+    alternativeLabel: "Désactiver le KPI",
+  },
+  {
+    id: "t3", name: "Atelier participatif #3", type: "événement", typeLabel: "Événement",
+    project: "ZAC Centre", deletedAt: "2026-02-08T16:45:00", deletedBy: "Sophie Leclerc",
+    relatedCount: 2,
+  },
+  {
+    id: "t4", name: "Planning v1 – Initial", type: "schedule-version", typeLabel: "Version planning",
+    project: "Mobilité Grand Ouest", deletedAt: "2026-02-07T09:00:00", deletedBy: "Jean Martin",
+    relatedCount: 1,
+    warningMessage: "Vous perdrez l'historique de ce planning.",
+    impactDetails: [{ label: "phases", count: 4 }, { label: "tâches", count: 12 }, { label: "livrables", count: 5 }],
+  },
+  {
+    id: "t5", name: "Exigence – Accessibilité PMR", type: "exigence", typeLabel: "Exigence",
+    project: "PLUi Littoral", deletedAt: "2026-02-06T11:20:00", deletedBy: "Marie Durand",
+    relatedCount: 3,
+  },
+  {
+    id: "t6", name: "Étude mobilité Grand Ouest", type: "projet", typeLabel: "Projet",
+    project: undefined, deletedAt: "2026-02-05T08:00:00", deletedBy: "Marie Durand",
+    relatedCount: 42,
+    impactDetails: [
+      { label: "contributions", count: 312 },
+      { label: "documents", count: 14 },
+      { label: "phases", count: 4 },
+      { label: "tâches", count: 18 },
+      { label: "livrables", count: 6 },
+      { label: "KPI", count: 4 },
+    ],
+  },
+  {
+    id: "t7", name: "Planning v2 – Actif", type: "schedule-version", typeLabel: "Version planning",
+    project: "PLUi Littoral", deletedAt: "2026-02-04T12:00:00", deletedBy: "Jean Martin",
+    relatedCount: 0,
+    blocked: true,
+    blockedReason: "Impossible de supprimer la version active du planning. Changez de version active d'abord.",
+    isActiveVersion: true,
+  },
 ];
 
 export default function Trash() {
@@ -84,6 +147,11 @@ export default function Trash() {
   const handleHardDelete = (item: TrashItem) => {
     setItems((prev) => prev.filter((i) => i.id !== item.id));
     toast.success(`"${item.name}" supprimé définitivement`);
+  };
+
+  const handleAlternativeAction = (item: TrashItem) => {
+    setItems((prev) => prev.filter((i) => i.id !== item.id));
+    toast.success(`"${item.name}" désactivé — restauré et masqué des dashboards`);
   };
 
   const uniqueTypes = [...new Set(MOCK_TRASH.map((i) => i.type))];
@@ -158,7 +226,9 @@ export default function Trash() {
               return (
                 <div
                   key={item.id}
-                  className="glass-card p-4 flex items-center gap-4 animate-slide-up"
+                  className={`glass-card p-4 flex items-center gap-4 animate-slide-up ${
+                    item.blocked ? "border-destructive/20" : ""
+                  }`}
                 >
                   <div className="h-9 w-9 rounded-lg bg-secondary/50 flex items-center justify-center shrink-0">
                     <Icon className="h-4 w-4 text-muted-foreground" />
@@ -172,6 +242,16 @@ export default function Trash() {
                       >
                         {item.typeLabel}
                       </Badge>
+                      {item.isActiveVersion && (
+                        <Badge variant="secondary" className="text-[10px] bg-destructive/15 text-destructive border-0">
+                          Version active
+                        </Badge>
+                      )}
+                      {item.versions && item.versions > 1 && (
+                        <Badge variant="outline" className="text-[9px]">
+                          {item.versions} versions
+                        </Badge>
+                      )}
                     </div>
                     <div className="flex items-center gap-2 mt-0.5 text-[11px] text-muted-foreground flex-wrap">
                       {item.project && <span>{item.project}</span>}
@@ -203,7 +283,11 @@ export default function Trash() {
                       <Button
                         size="sm"
                         variant="ghost"
-                        className="text-xs gap-1.5 text-destructive hover:bg-destructive/10"
+                        className={`text-xs gap-1.5 ${
+                          item.blocked
+                            ? "text-muted-foreground cursor-not-allowed"
+                            : "text-destructive hover:bg-destructive/10"
+                        }`}
                         onClick={() => setHardDeleteTarget(item)}
                       >
                         <AlertTriangle className="h-3.5 w-3.5" />
@@ -225,6 +309,18 @@ export default function Trash() {
           entityName={hardDeleteTarget.name}
           entityType={hardDeleteTarget.typeLabel}
           relatedCount={hardDeleteTarget.relatedCount}
+          impactDetails={hardDeleteTarget.impactDetails}
+          warningMessage={hardDeleteTarget.warningMessage}
+          blocked={hardDeleteTarget.blocked}
+          blockedReason={hardDeleteTarget.blockedReason}
+          alternativeAction={
+            hardDeleteTarget.alternativeLabel
+              ? {
+                  label: hardDeleteTarget.alternativeLabel,
+                  onClick: () => handleAlternativeAction(hardDeleteTarget),
+                }
+              : undefined
+          }
           onConfirm={() => handleHardDelete(hardDeleteTarget)}
         />
       )}
