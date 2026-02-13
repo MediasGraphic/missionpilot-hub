@@ -18,6 +18,9 @@ import Configuration from "./pages/Configuration";
 import AIAssistant from "./pages/AIAssistant";
 import Changes from "./pages/Changes";
 import Trash from "./pages/Trash";
+import Questionnaires from "./pages/Questionnaires";
+import Contributions from "./pages/Contributions";
+import Tutorials from "./pages/Tutorials";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -44,6 +47,9 @@ const App = () => (
             <Route path="/assistant-ia" element={<AIAssistant />} />
             <Route path="/changements" element={<Changes />} />
             <Route path="/corbeille" element={<Trash />} />
+            <Route path="/questionnaires" element={<Questionnaires />} />
+            <Route path="/contributions" element={<Contributions />} />
+            <Route path="/tutoriels" element={<Tutorials />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
