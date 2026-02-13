@@ -14,6 +14,7 @@ import {
   Settings2,
   Bot,
   GitCompare,
+  Trash2,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
@@ -60,6 +61,7 @@ const secondaryNav: NavItem[] = [
 ];
 
 const adminNav: NavItem[] = [
+  { title: "Corbeille", url: "/corbeille", icon: Trash2 },
   { title: "Configuration", url: "/configuration", icon: Settings2 },
   { title: "Administration", url: "/admin", icon: Settings },
 ];

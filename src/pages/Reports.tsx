@@ -1,14 +1,19 @@
+import { useState } from "react";
 import Layout from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Download, FileText, CalendarRange, BarChart3 } from "lucide-react";
+import { EntityActions } from "@/components/EntityActions";
+import { SoftDeleteDialog } from "@/components/SoftDeleteDialog";
+import { useSoftDelete } from "@/hooks/useSoftDelete";
+import { toast } from "sonner";
 
-const reports = [
-  { name: "Rapport d'avancement mensuel – Janvier 2026", type: "Avancement", project: "Mobilité Grand Ouest", date: "31 jan 2026", pages: 12 },
-  { name: "Bilan de concertation intermédiaire", type: "Concertation", project: "ZAC Centre", date: "25 jan 2026", pages: 24 },
-  { name: "Synthèse COPIL #3", type: "COPIL", project: "Mobilité Grand Ouest", date: "20 jan 2026", pages: 8 },
-  { name: "Tableau de bord KPI – T4 2025", type: "KPI", project: "Tous", date: "5 jan 2026", pages: 6 },
-  { name: "Note de synthèse diagnostic", type: "Technique", project: "PLUi Littoral", date: "15 fév 2026", pages: 18 },
+const reportsData = [
+  { id: "r1", name: "Rapport d'avancement mensuel – Janvier 2026", type: "Avancement", project: "Mobilité Grand Ouest", date: "31 jan 2026", pages: 12 },
+  { id: "r2", name: "Bilan de concertation intermédiaire", type: "Concertation", project: "ZAC Centre", date: "25 jan 2026", pages: 24 },
+  { id: "r3", name: "Synthèse COPIL #3", type: "COPIL", project: "Mobilité Grand Ouest", date: "20 jan 2026", pages: 8 },
+  { id: "r4", name: "Tableau de bord KPI – T4 2025", type: "KPI", project: "Tous", date: "5 jan 2026", pages: 6 },
+  { id: "r5", name: "Note de synthèse diagnostic", type: "Technique", project: "PLUi Littoral", date: "15 fév 2026", pages: 18 },
 ];
 
 const typeIcons: Record<string, typeof FileText> = {
@@ -20,6 +25,17 @@ const typeIcons: Record<string, typeof FileText> = {
 };
 
 export default function Reports() {
+  const [deleteTarget, setDeleteTarget] = useState<(typeof reportsData)[0] | null>(null);
+  const { softDelete, isDeleted } = useSoftDelete();
+
+  const handleSoftDelete = () => {
+    if (!deleteTarget) return;
+    softDelete({ id: deleteTarget.id, name: deleteTarget.name, type: "rapport" });
+    setDeleteTarget(null);
+  };
+
+  const visibleReports = reportsData.filter((r) => !isDeleted(r.id));
+
   return (
     <Layout>
       <div className="animate-fade-in space-y-6">
@@ -35,10 +51,10 @@ export default function Reports() {
         </div>
 
         <div className="space-y-3">
-          {reports.map((report, i) => {
+          {visibleReports.map((report) => {
             const Icon = typeIcons[report.type] || FileText;
             return (
-              <div key={i} className="glass-card p-4 hover:border-primary/20 transition-all cursor-pointer group animate-slide-up">
+              <div key={report.id} className="glass-card p-4 hover:border-primary/20 transition-all cursor-pointer group animate-slide-up">
                 <div className="flex items-start gap-3">
                   <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
                     <Icon className="h-5 w-5 text-primary" />
@@ -53,15 +69,34 @@ export default function Reports() {
                       <span>{report.pages} pages</span>
                     </div>
                   </div>
-                  <Button variant="ghost" size="icon" className="shrink-0 text-muted-foreground hover:text-primary">
-                    <Download className="h-4 w-4" />
-                  </Button>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-primary">
+                      <Download className="h-4 w-4" />
+                    </Button>
+                    <EntityActions
+                      entityName={report.name}
+                      onEdit={() => toast.info("Modifier : " + report.name)}
+                      onRename={() => toast.info("Renommer : " + report.name)}
+                      onDuplicate={() => toast.info("Dupliquer : " + report.name)}
+                      onDelete={() => setDeleteTarget(report)}
+                    />
+                  </div>
                 </div>
               </div>
             );
           })}
         </div>
       </div>
+
+      {deleteTarget && (
+        <SoftDeleteDialog
+          open={!!deleteTarget}
+          onOpenChange={(open) => !open && setDeleteTarget(null)}
+          entityName={deleteTarget.name}
+          entityType="le rapport"
+          onConfirm={handleSoftDelete}
+        />
+      )}
     </Layout>
   );
 }

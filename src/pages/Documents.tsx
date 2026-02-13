@@ -1,17 +1,22 @@
+import { useState } from "react";
 import Layout from "@/components/Layout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, Search, FileText, FileSpreadsheet, Mail, File, Download, Tag } from "lucide-react";
+import { Plus, Search, FileText, FileSpreadsheet, Mail, File } from "lucide-react";
+import { EntityActions } from "@/components/EntityActions";
+import { SoftDeleteDialog } from "@/components/SoftDeleteDialog";
+import { useSoftDelete } from "@/hooks/useSoftDelete";
+import { toast } from "sonner";
 
-const documents = [
-  { name: "CCTP Mission Mobilité v3", type: "CCTP", format: "pdf", project: "Mobilité Grand Ouest", tags: ["contractuel", "v3"], date: "12 jan 2026", size: "2.4 Mo" },
-  { name: "CR Comité de pilotage #4", type: "CR", format: "docx", project: "Mobilité Grand Ouest", tags: ["COPIL", "phase 2"], date: "8 fév 2026", size: "890 Ko" },
-  { name: "Note de cadrage PLUi", type: "Note", format: "pdf", project: "PLUi Littoral", tags: ["cadrage"], date: "5 mar 2026", size: "1.1 Mo" },
-  { name: "Échange client - retours diagnostic", type: "Email", format: "eml", project: "Mobilité Grand Ouest", tags: ["client", "diagnostic"], date: "10 fév 2026", size: "45 Ko" },
-  { name: "Données enquête ménages", type: "Data", format: "xlsx", project: "Mobilité Grand Ouest", tags: ["données", "enquête"], date: "3 fév 2026", size: "5.8 Mo" },
-  { name: "PV réunion publique #2", type: "CR", format: "pdf", project: "ZAC Centre", tags: ["concertation", "public"], date: "20 jan 2026", size: "1.3 Mo" },
-  { name: "Rapport intermédiaire", type: "Livrable", format: "pdf", project: "ZAC Centre", tags: ["livrable", "v2"], date: "1 fév 2026", size: "4.2 Mo" },
+const documentsData = [
+  { id: "d1", name: "CCTP Mission Mobilité v3", type: "CCTP", format: "pdf", project: "Mobilité Grand Ouest", tags: ["contractuel", "v3"], date: "12 jan 2026", size: "2.4 Mo" },
+  { id: "d2", name: "CR Comité de pilotage #4", type: "CR", format: "docx", project: "Mobilité Grand Ouest", tags: ["COPIL", "phase 2"], date: "8 fév 2026", size: "890 Ko" },
+  { id: "d3", name: "Note de cadrage PLUi", type: "Note", format: "pdf", project: "PLUi Littoral", tags: ["cadrage"], date: "5 mar 2026", size: "1.1 Mo" },
+  { id: "d4", name: "Échange client - retours diagnostic", type: "Email", format: "eml", project: "Mobilité Grand Ouest", tags: ["client", "diagnostic"], date: "10 fév 2026", size: "45 Ko" },
+  { id: "d5", name: "Données enquête ménages", type: "Data", format: "xlsx", project: "Mobilité Grand Ouest", tags: ["données", "enquête"], date: "3 fév 2026", size: "5.8 Mo" },
+  { id: "d6", name: "PV réunion publique #2", type: "CR", format: "pdf", project: "ZAC Centre", tags: ["concertation", "public"], date: "20 jan 2026", size: "1.3 Mo" },
+  { id: "d7", name: "Rapport intermédiaire", type: "Livrable", format: "pdf", project: "ZAC Centre", tags: ["livrable", "v2"], date: "1 fév 2026", size: "4.2 Mo" },
 ];
 
 const formatIcons: Record<string, typeof FileText> = {
@@ -22,6 +27,17 @@ const formatIcons: Record<string, typeof FileText> = {
 };
 
 export default function Documents() {
+  const [deleteTarget, setDeleteTarget] = useState<(typeof documentsData)[0] | null>(null);
+  const { softDelete, isDeleted } = useSoftDelete();
+
+  const handleSoftDelete = () => {
+    if (!deleteTarget) return;
+    softDelete({ id: deleteTarget.id, name: deleteTarget.name, type: "document" });
+    setDeleteTarget(null);
+  };
+
+  const visibleDocs = documentsData.filter((d) => !isDeleted(d.id));
+
   return (
     <Layout>
       <div className="animate-fade-in space-y-6">
@@ -53,13 +69,14 @@ export default function Documents() {
                   <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground hidden lg:table-cell">Tags</th>
                   <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground hidden sm:table-cell">Date</th>
                   <th className="text-right py-3 px-4 text-xs font-medium text-muted-foreground">Taille</th>
+                  <th className="w-10"></th>
                 </tr>
               </thead>
               <tbody>
-                {documents.map((doc, i) => {
+                {visibleDocs.map((doc) => {
                   const Icon = formatIcons[doc.format] || File;
                   return (
-                    <tr key={i} className="border-b border-border/30 hover:bg-secondary/20 transition-colors cursor-pointer group">
+                    <tr key={doc.id} className="border-b border-border/30 hover:bg-secondary/20 transition-colors cursor-pointer group">
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-3">
                           <Icon className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -73,14 +90,21 @@ export default function Documents() {
                       <td className="py-3 px-4 hidden lg:table-cell">
                         <div className="flex gap-1 flex-wrap">
                           {doc.tags.map((tag) => (
-                            <Badge key={tag} variant="secondary" className="text-[10px] bg-secondary border-0">
-                              {tag}
-                            </Badge>
+                            <Badge key={tag} variant="secondary" className="text-[10px] bg-secondary border-0">{tag}</Badge>
                           ))}
                         </div>
                       </td>
                       <td className="py-3 px-4 text-muted-foreground hidden sm:table-cell whitespace-nowrap">{doc.date}</td>
                       <td className="py-3 px-4 text-right text-muted-foreground whitespace-nowrap">{doc.size}</td>
+                      <td className="py-2 px-2">
+                        <EntityActions
+                          entityName={doc.name}
+                          onEdit={() => toast.info("Modifier : " + doc.name)}
+                          onRename={() => toast.info("Renommer : " + doc.name)}
+                          onDuplicate={() => toast.info("Dupliquer : " + doc.name)}
+                          onDelete={() => setDeleteTarget(doc)}
+                        />
+                      </td>
                     </tr>
                   );
                 })}
@@ -89,6 +113,16 @@ export default function Documents() {
           </div>
         </div>
       </div>
+
+      {deleteTarget && (
+        <SoftDeleteDialog
+          open={!!deleteTarget}
+          onOpenChange={(open) => !open && setDeleteTarget(null)}
+          entityName={deleteTarget.name}
+          entityType="le document"
+          onConfirm={handleSoftDelete}
+        />
+      )}
     </Layout>
   );
 }
