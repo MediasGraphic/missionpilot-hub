@@ -15,6 +15,7 @@ import {
   Bot,
   GitCompare,
   Trash2,
+  Shield,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
@@ -65,6 +66,7 @@ const adminNav: NavItem[] = [
   { title: "Corbeille", url: "/corbeille", icon: Trash2 },
   { title: "Configuration", url: "/configuration", icon: Settings2 },
   { title: "Administration", url: "/admin", icon: Settings },
+  { title: "Diagnostic", url: "/diagnostic", icon: Shield },
 ];
 
 export function AppSidebar() {

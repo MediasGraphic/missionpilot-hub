@@ -21,6 +21,7 @@ import Trash from "./pages/Trash";
 import Questionnaires from "./pages/Questionnaires";
 import Contributions from "./pages/Contributions";
 import Tutorials from "./pages/Tutorials";
+import Diagnostic from "./pages/Diagnostic";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -50,6 +51,7 @@ const App = () => (
             <Route path="/questionnaires" element={<Questionnaires />} />
             <Route path="/contributions" element={<Contributions />} />
             <Route path="/tutoriels" element={<Tutorials />} />
+            <Route path="/diagnostic" element={<Diagnostic />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
