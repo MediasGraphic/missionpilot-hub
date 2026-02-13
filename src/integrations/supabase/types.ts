@@ -509,6 +509,160 @@ export type Database = {
         }
         Relationships: []
       }
+      questionnaire_responses: {
+        Row: {
+          answers_json: Json
+          completion_rate: number
+          created_at: string
+          device_hash: string | null
+          id: string
+          questionnaire_id: string
+          respondent_email: string | null
+          share_id: string | null
+        }
+        Insert: {
+          answers_json?: Json
+          completion_rate?: number
+          created_at?: string
+          device_hash?: string | null
+          id?: string
+          questionnaire_id: string
+          respondent_email?: string | null
+          share_id?: string | null
+        }
+        Update: {
+          answers_json?: Json
+          completion_rate?: number
+          created_at?: string
+          device_hash?: string | null
+          id?: string
+          questionnaire_id?: string
+          respondent_email?: string | null
+          share_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "questionnaire_responses_questionnaire_id_fkey"
+            columns: ["questionnaire_id"]
+            isOneToOne: false
+            referencedRelation: "questionnaires"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "questionnaire_responses_share_id_fkey"
+            columns: ["share_id"]
+            isOneToOne: false
+            referencedRelation: "questionnaire_shares"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      questionnaire_shares: {
+        Row: {
+          access_mode: string
+          created_at: string
+          ends_at: string | null
+          id: string
+          max_responses: number | null
+          one_per_device: boolean
+          pin_code: string | null
+          questionnaire_id: string
+          share_type: string
+          starts_at: string | null
+          token: string
+        }
+        Insert: {
+          access_mode?: string
+          created_at?: string
+          ends_at?: string | null
+          id?: string
+          max_responses?: number | null
+          one_per_device?: boolean
+          pin_code?: string | null
+          questionnaire_id: string
+          share_type?: string
+          starts_at?: string | null
+          token?: string
+        }
+        Update: {
+          access_mode?: string
+          created_at?: string
+          ends_at?: string | null
+          id?: string
+          max_responses?: number | null
+          one_per_device?: boolean
+          pin_code?: string | null
+          questionnaire_id?: string
+          share_type?: string
+          starts_at?: string | null
+          token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "questionnaire_shares_questionnaire_id_fkey"
+            columns: ["questionnaire_id"]
+            isOneToOne: false
+            referencedRelation: "questionnaires"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      questionnaires: {
+        Row: {
+          access_mode: string
+          collect_identity: boolean
+          created_at: string
+          deleted_at: string | null
+          description: string | null
+          id: string
+          project_id: string | null
+          questions_json: Json
+          sections_json: Json
+          status: string
+          title: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          access_mode?: string
+          collect_identity?: boolean
+          created_at?: string
+          deleted_at?: string | null
+          description?: string | null
+          id?: string
+          project_id?: string | null
+          questions_json?: Json
+          sections_json?: Json
+          status?: string
+          title: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          access_mode?: string
+          collect_identity?: boolean
+          created_at?: string
+          deleted_at?: string | null
+          description?: string | null
+          id?: string
+          project_id?: string | null
+          questions_json?: Json
+          sections_json?: Json
+          status?: string
+          title?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "questionnaires_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       requirements: {
         Row: {
           acceptance_criteria: string | null
@@ -635,6 +789,35 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      share_invites: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          share_id: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          share_id: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          share_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "share_invites_share_id_fkey"
+            columns: ["share_id"]
+            isOneToOne: false
+            referencedRelation: "questionnaire_shares"
             referencedColumns: ["id"]
           },
         ]
