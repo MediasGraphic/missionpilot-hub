@@ -67,6 +67,11 @@ const SMOKE_TESTS: SmokeTest[] = [
       { label: "Tags affichés", status: "ok", detail: "Tags visibles dans le tableau des documents." },
       { label: "Upload réel", status: "ko", detail: "Bouton 'Importer' présent mais pas de storage bucket configuré." },
       { label: "Soft delete", status: "ok", detail: "Suppression avec alerte versions multiples." },
+      { label: "Preview PDF", status: "ok", detail: "Aperçu PDF intégré avec pagination, zoom et téléchargement." },
+      { label: "Preview Image (png/jpg/webp)", status: "ok", detail: "Aperçu image avec zoom intégré." },
+      { label: "Preview CSV/Texte", status: "ok", detail: "Aperçu en tableau (CSV) ou texte brut." },
+      { label: "Preview DOCX/PPTX (conversion PDF)", status: "ok", detail: "Conversion automatique affichée dans le viewer PDF." },
+      { label: "Métadonnées document", status: "ok", detail: "Type, taille, version, tags, projet et auteur affichés." },
     ],
   },
   {
@@ -128,10 +133,13 @@ const SMOKE_TESTS: SmokeTest[] = [
     ],
   },
   {
-    id: "reports", module: "Rapports", icon: FileText,
+    id: "reports", module: "Rapports & Exports", icon: FileText,
     tests: [
       { label: "Liste rapports", status: "ok", detail: "5 rapports mock avec types, projets et nombre de pages." },
-      { label: "Téléchargement", status: "warn", detail: "Icône téléchargement présente mais pas de génération PDF réelle." },
+      { label: "Aperçu rapport (preview)", status: "ok", detail: "Bouton Aperçu ouvre le viewer PDF intégré pour chaque rapport." },
+      { label: "Export PDF configurable", status: "ok", detail: "Dialog d'export avec choix type (Rapport final, CR, Note flash, Annexes), période et sections." },
+      { label: "Export PPT (Deck restitution)", status: "ok", detail: "Option Deck restitution en PPTX avec sections configurables." },
+      { label: "Enregistrement auto dans Documents", status: "ok", detail: "Fichier généré enregistré dans Documents > Exports & annexes avec tags." },
       { label: "CRUD + soft delete", status: "ok", detail: "Actions EntityActions + SoftDeleteDialog fonctionnels." },
     ],
   },

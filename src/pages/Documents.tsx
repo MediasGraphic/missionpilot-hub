@@ -3,9 +3,10 @@ import Layout from "@/components/Layout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, Search, FileText, FileSpreadsheet, Mail, File } from "lucide-react";
+import { Plus, Search, FileText, FileSpreadsheet, Mail, File, Eye } from "lucide-react";
 import { EntityActions } from "@/components/EntityActions";
 import { SoftDeleteDialog } from "@/components/SoftDeleteDialog";
+import { DocumentPreviewDialog, type DocumentMeta } from "@/components/DocumentPreviewDialog";
 import { useSoftDelete } from "@/hooks/useSoftDelete";
 import { toast } from "sonner";
 
@@ -40,6 +41,7 @@ const formatIcons: Record<string, typeof FileText> = {
 
 export default function Documents() {
   const [deleteTarget, setDeleteTarget] = useState<DocData | null>(null);
+  const [previewDoc, setPreviewDoc] = useState<DocumentMeta | null>(null);
   const { softDelete, isDeleted } = useSoftDelete();
 
   const handleSoftDelete = () => {
@@ -116,6 +118,25 @@ export default function Documents() {
                       <td className="py-3 px-4 text-muted-foreground hidden sm:table-cell whitespace-nowrap">{doc.date}</td>
                       <td className="py-3 px-4 text-right text-muted-foreground whitespace-nowrap">{doc.size}</td>
                       <td className="py-2 px-2">
+                        <div className="flex items-center gap-0.5">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-muted-foreground hover:text-primary"
+                            onClick={() => setPreviewDoc({
+                              id: doc.id,
+                              name: doc.name,
+                              format: doc.format,
+                              type: doc.type,
+                              size: doc.size,
+                              date: doc.date,
+                              project: doc.project,
+                              tags: doc.tags,
+                              versions: doc.versions,
+                            })}
+                          >
+                            <Eye className="h-3.5 w-3.5" />
+                          </Button>
                         <EntityActions
                           entityName={doc.name}
                           onEdit={() => toast.info("Modifier : " + doc.name)}
@@ -123,6 +144,7 @@ export default function Documents() {
                           onDuplicate={() => toast.info("Dupliquer : " + doc.name)}
                           onDelete={() => setDeleteTarget(doc)}
                         />
+                        </div>
                       </td>
                     </tr>
                   );
@@ -132,6 +154,12 @@ export default function Documents() {
           </div>
         </div>
       </div>
+
+      <DocumentPreviewDialog
+        open={!!previewDoc}
+        onOpenChange={(open) => !open && setPreviewDoc(null)}
+        document={previewDoc}
+      />
 
       {deleteTarget && (
         <SoftDeleteDialog

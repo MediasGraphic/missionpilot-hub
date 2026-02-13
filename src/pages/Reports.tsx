@@ -2,9 +2,11 @@ import { useState } from "react";
 import Layout from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Download, FileText, CalendarRange, BarChart3 } from "lucide-react";
+import { Download, FileText, CalendarRange, BarChart3, Eye, Presentation } from "lucide-react";
 import { EntityActions } from "@/components/EntityActions";
 import { SoftDeleteDialog } from "@/components/SoftDeleteDialog";
+import { DocumentPreviewDialog, type DocumentMeta } from "@/components/DocumentPreviewDialog";
+import { ReportExportDialog } from "@/components/ReportExportDialog";
 import { useSoftDelete } from "@/hooks/useSoftDelete";
 import { toast } from "sonner";
 
@@ -26,6 +28,8 @@ const typeIcons: Record<string, typeof FileText> = {
 
 export default function Reports() {
   const [deleteTarget, setDeleteTarget] = useState<(typeof reportsData)[0] | null>(null);
+  const [previewDoc, setPreviewDoc] = useState<DocumentMeta | null>(null);
+  const [exportOpen, setExportOpen] = useState(false);
   const { softDelete, isDeleted } = useSoftDelete();
 
   const handleSoftDelete = () => {
@@ -44,7 +48,7 @@ export default function Reports() {
             <h1 className="font-heading text-2xl font-bold">Rapports</h1>
             <p className="text-muted-foreground text-sm mt-1">Générez et consultez vos rapports de mission</p>
           </div>
-          <Button className="gap-2 shrink-0">
+          <Button className="gap-2 shrink-0" onClick={() => setExportOpen(true)}>
             <Download className="h-4 w-4" />
             Générer un rapport
           </Button>
@@ -70,6 +74,22 @@ export default function Reports() {
                     </div>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="text-muted-foreground hover:text-primary"
+                      onClick={() => setPreviewDoc({
+                        id: report.id,
+                        name: report.name,
+                        format: "pdf",
+                        type: report.type,
+                        date: report.date,
+                        project: report.project,
+                        size: `${report.pages * 150} Ko`,
+                      })}
+                    >
+                      <Eye className="h-4 w-4" />
+                    </Button>
                     <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-primary">
                       <Download className="h-4 w-4" />
                     </Button>
@@ -87,6 +107,17 @@ export default function Reports() {
           })}
         </div>
       </div>
+
+      <DocumentPreviewDialog
+        open={!!previewDoc}
+        onOpenChange={(open) => !open && setPreviewDoc(null)}
+        document={previewDoc}
+      />
+
+      <ReportExportDialog
+        open={exportOpen}
+        onOpenChange={setExportOpen}
+      />
 
       {deleteTarget && (
         <SoftDeleteDialog
