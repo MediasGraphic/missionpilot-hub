@@ -799,6 +799,7 @@ export type Database = {
         | "questionnaires"
         | "contributions"
         | "dashboards"
+        | "livrables"
       project_status: "brouillon" | "actif" | "en_pause" | "terminé" | "archivé"
       schedule_item_type: "phase" | "task" | "deliverable"
       severity_level: "faible" | "moyen" | "élevé" | "critique"
@@ -963,6 +964,7 @@ export const Constants = {
         "questionnaires",
         "contributions",
         "dashboards",
+        "livrables",
       ],
       project_status: ["brouillon", "actif", "en_pause", "terminé", "archivé"],
       schedule_item_type: ["phase", "task", "deliverable"],
