@@ -9,9 +9,13 @@ import {
   ClipboardList,
   Settings,
   Compass,
+  Sparkles,
+  Layers,
+  Settings2,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
+import { useModuleToggles, type ModuleKey } from "@/hooks/useModuleToggles";
 
 import {
   Sidebar,
@@ -27,21 +31,32 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 
-const mainNav = [
+interface NavItem {
+  title: string;
+  url: string;
+  icon: React.ElementType;
+  moduleKey?: ModuleKey;
+}
+
+const mainNav: NavItem[] = [
   { title: "Tableau de bord", url: "/", icon: LayoutDashboard },
   { title: "Projets", url: "/projets", icon: FolderKanban },
-  { title: "Planning", url: "/planning", icon: CalendarRange },
-  { title: "Livrables", url: "/livrables", icon: Package },
-  { title: "Documents", url: "/documents", icon: FileText },
+  { title: "Planning", url: "/planning", icon: CalendarRange, moduleKey: "planning" },
+  { title: "Planning IA", url: "/planning-ia", icon: Sparkles, moduleKey: "planning" },
+  { title: "Livrables", url: "/livrables", icon: Package, moduleKey: "livrables" },
+  { title: "Documents", url: "/documents", icon: FileText, moduleKey: "documents" },
 ];
 
-const secondaryNav = [
-  { title: "Concertation", url: "/activites", icon: MessageSquare },
-  { title: "KPI", url: "/kpi", icon: BarChart3 },
+const secondaryNav: NavItem[] = [
+  { title: "Concertation", url: "/activites", icon: MessageSquare, moduleKey: "concertation" },
+  { title: "Questionnaires", url: "/questionnaires", icon: ClipboardList, moduleKey: "questionnaires" },
+  { title: "Contributions", url: "/contributions", icon: Layers, moduleKey: "contributions" },
+  { title: "KPI", url: "/kpi", icon: BarChart3, moduleKey: "dashboards" },
   { title: "Rapports", url: "/rapports", icon: ClipboardList },
 ];
 
-const adminNav = [
+const adminNav: NavItem[] = [
+  { title: "Configuration", url: "/configuration", icon: Settings2 },
   { title: "Administration", url: "/admin", icon: Settings },
 ];
 
@@ -49,12 +64,13 @@ export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const location = useLocation();
+  const { isModuleEnabled } = useModuleToggles();
 
-  const isActive = (path: string) =>
-    path === "/" ? location.pathname === "/" : location.pathname.startsWith(path);
+  const filterItems = (items: NavItem[]) =>
+    items.filter((item) => !item.moduleKey || isModuleEnabled(item.moduleKey));
 
-  const renderItems = (items: typeof mainNav) =>
-    items.map((item) => (
+  const renderItems = (items: NavItem[]) =>
+    filterItems(items).map((item) => (
       <SidebarMenuItem key={item.title}>
         <SidebarMenuButton asChild>
           <NavLink
