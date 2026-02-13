@@ -15,6 +15,7 @@ import KPI from "./pages/KPI";
 import Reports from "./pages/Reports";
 import Admin from "./pages/Admin";
 import Configuration from "./pages/Configuration";
+import AIAssistant from "./pages/AIAssistant";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -38,6 +39,7 @@ const App = () => (
             <Route path="/rapports" element={<Reports />} />
             <Route path="/admin" element={<Admin />} />
             <Route path="/configuration" element={<Configuration />} />
+            <Route path="/assistant-ia" element={<AIAssistant />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

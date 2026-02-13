@@ -12,6 +12,7 @@ import {
   Sparkles,
   Layers,
   Settings2,
+  Bot,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
@@ -45,6 +46,7 @@ const mainNav: NavItem[] = [
   { title: "Planning IA", url: "/planning-ia", icon: Sparkles, moduleKey: "planning" },
   { title: "Livrables", url: "/livrables", icon: Package, moduleKey: "livrables" },
   { title: "Documents", url: "/documents", icon: FileText, moduleKey: "documents" },
+  { title: "Assistant IA", url: "/assistant-ia", icon: Bot },
 ];
 
 const secondaryNav: NavItem[] = [
