@@ -5,18 +5,11 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import {
-  Download,
-  ZoomIn,
-  ZoomOut,
-  ChevronLeft,
-  ChevronRight,
-  FileText,
-  FileSpreadsheet,
-  Image as ImageIcon,
-  File,
-  Mail,
-  Eye,
+  Download, ZoomIn, ZoomOut, ChevronLeft, ChevronRight,
+  FileText, FileSpreadsheet, Image as ImageIcon, File, Mail, Eye,
 } from "lucide-react";
+import { getDownloadUrl } from "@/lib/documentService";
+import { toast } from "sonner";
 
 interface DocumentMeta {
   id: string;
@@ -29,8 +22,8 @@ interface DocumentMeta {
   tags?: string[];
   versions?: number;
   author?: string;
-  content?: string; // for text/csv preview
-  url?: string; // for actual file URL
+  content?: string;
+  url?: string; // signed URL for real preview
 }
 
 interface DocumentPreviewDialogProps {
@@ -41,140 +34,76 @@ interface DocumentPreviewDialogProps {
 
 export function DocumentPreviewDialog({ open, onOpenChange, document }: DocumentPreviewDialogProps) {
   const [zoom, setZoom] = useState(100);
-  const [page, setPage] = useState(1);
 
   if (!document) return null;
 
   const format = document.format?.toLowerCase() || "";
-
   const isImage = ["png", "jpg", "jpeg", "webp", "gif", "svg"].includes(format);
   const isPdf = format === "pdf";
-  const isText = ["txt", "md", "csv", "json", "xml"].includes(format);
-  const isCsv = format === "csv";
-  const isOffice = ["docx", "pptx", "xlsx", "xls", "doc", "ppt"].includes(format);
+  const hasRealUrl = !!document.url;
 
   const handleZoomIn = () => setZoom((z) => Math.min(z + 25, 200));
   const handleZoomOut = () => setZoom((z) => Math.max(z - 25, 50));
 
+  const handleDownload = async () => {
+    if (!document.url) {
+      toast.error("Pas de fichier associé");
+      return;
+    }
+    // The url is already a signed URL, open it
+    window.open(document.url, "_blank");
+  };
+
   const renderPreview = () => {
-    if (isPdf) {
+    if (hasRealUrl && isPdf) {
       return (
-        <div className="flex flex-col items-center gap-4 p-6">
-          <div
-            className="bg-secondary/30 rounded-lg border border-border/50 w-full flex items-center justify-center"
-            style={{ minHeight: `${3.5 * (zoom / 100)}rem`, height: `${28 * (zoom / 100)}rem` }}
-          >
-            <div className="text-center space-y-3 p-8" style={{ transform: `scale(${zoom / 100})` }}>
-              <FileText className="h-16 w-16 text-primary/40 mx-auto" />
-              <p className="text-sm font-medium">{document.name}</p>
-              <p className="text-xs text-muted-foreground">
-                Aperçu PDF — Page {page}
-              </p>
-              <div className="bg-secondary/50 rounded p-4 max-w-sm mx-auto text-left text-xs text-muted-foreground space-y-2">
-                <p className="font-medium text-foreground">Sommaire</p>
-                <p>1. Introduction et contexte</p>
-                <p>2. Méthodologie</p>
-                <p>3. Résultats et analyses</p>
-                <p>4. Recommandations</p>
-                <p>5. Annexes</p>
-              </div>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="icon" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1}>
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <span className="text-sm text-muted-foreground px-2">
-              Page {page} / {document.versions ? document.versions * 4 : 12}
-            </span>
-            <Button variant="outline" size="icon" onClick={() => setPage((p) => p + 1)}>
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
+        <div className="w-full" style={{ height: `${28 * (zoom / 100)}rem` }}>
+          <iframe
+            src={`${document.url}#toolbar=0`}
+            className="w-full h-full border-0 rounded"
+            title={document.name}
+          />
         </div>
       );
     }
 
-    if (isImage) {
+    if (hasRealUrl && isImage) {
       return (
         <div className="flex items-center justify-center p-6">
-          <div
-            className="bg-secondary/30 rounded-lg border border-border/50 overflow-hidden"
+          <img
+            src={document.url}
+            alt={document.name}
+            className="max-w-full rounded-lg border border-border/50"
             style={{ transform: `scale(${zoom / 100})`, transformOrigin: "center" }}
-          >
-            <div className="w-80 h-60 flex items-center justify-center bg-gradient-to-br from-primary/10 to-accent/10">
-              <ImageIcon className="h-20 w-20 text-primary/30" />
-            </div>
-          </div>
+          />
         </div>
       );
     }
 
-    if (isCsv) {
-      const csvData = document.content || "Nom,Type,Valeur,Date\nÉlément 1,A,42,2026-01-15\nÉlément 2,B,87,2026-01-20\nÉlément 3,A,35,2026-02-01\nÉlément 4,C,63,2026-02-05";
-      const rows = csvData.split("\n").map((r) => r.split(","));
-      return (
-        <div className="p-4 overflow-auto">
-          <table className="w-full text-sm border border-border/50 rounded">
-            <thead>
-              <tr className="bg-secondary/40">
-                {rows[0]?.map((h, i) => (
-                  <th key={i} className="py-2 px-3 text-left text-xs font-medium text-muted-foreground border-b border-border/30">
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.slice(1).map((row, ri) => (
-                <tr key={ri} className="border-b border-border/20 hover:bg-secondary/20">
-                  {row.map((cell, ci) => (
-                    <td key={ci} className="py-1.5 px-3 text-xs">{cell}</td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      );
-    }
-
-    if (isText) {
-      return (
-        <div className="p-4">
-          <pre className="bg-secondary/30 rounded-lg border border-border/50 p-4 text-xs font-mono overflow-auto max-h-96 text-muted-foreground whitespace-pre-wrap">
-            {document.content || `# ${document.name}\n\nContenu du document texte.\n\nLorem ipsum dolor sit amet, consectetur adipiscing elit.\nSed do eiusmod tempor incididunt ut labore et dolore magna aliqua.`}
-          </pre>
-        </div>
-      );
-    }
-
-    if (isOffice) {
+    if (!hasRealUrl) {
       return (
         <div className="flex flex-col items-center gap-4 p-8">
           <div className="bg-secondary/30 rounded-lg border border-border/50 p-8 text-center space-y-3">
-            <FileSpreadsheet className="h-16 w-16 text-primary/40 mx-auto" />
+            <File className="h-16 w-16 text-muted-foreground/30 mx-auto" />
             <p className="text-sm font-medium">{document.name}</p>
-            <p className="text-xs text-muted-foreground max-w-sm">
-              Aperçu converti en PDF. Le document original ({format.toUpperCase()}) a été converti automatiquement pour la prévisualisation.
+            <p className="text-xs text-muted-foreground">
+              Ce document n'a pas de fichier associé.<br />
+              Il s'agit d'une référence documentaire.
             </p>
-            <div className="bg-secondary/50 rounded p-4 text-left text-xs text-muted-foreground space-y-1.5">
-              <p>📄 Format original : {format.toUpperCase()}</p>
-              <p>📐 Taille : {document.size || "—"}</p>
-              <p>🔄 Conversion : automatique à l'import</p>
-            </div>
           </div>
         </div>
       );
     }
 
+    // Fallback for other file types with a URL
     return (
       <div className="flex flex-col items-center gap-3 p-8">
         <File className="h-16 w-16 text-muted-foreground/40" />
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm font-medium">{document.name}</p>
+        <p className="text-xs text-muted-foreground">
           Aperçu non disponible pour le format .{format}
         </p>
-        <Button variant="outline" size="sm" className="gap-2">
+        <Button variant="outline" size="sm" className="gap-2" onClick={handleDownload}>
           <Download className="h-3.5 w-3.5" /> Télécharger
         </Button>
       </div>
@@ -182,15 +111,8 @@ export function DocumentPreviewDialog({ open, onOpenChange, document }: Document
   };
 
   const formatIcon: Record<string, typeof FileText> = {
-    pdf: FileText,
-    docx: FileText,
-    xlsx: FileSpreadsheet,
-    eml: Mail,
-    csv: FileSpreadsheet,
-    png: ImageIcon,
-    jpg: ImageIcon,
-    jpeg: ImageIcon,
-    webp: ImageIcon,
+    pdf: FileText, docx: FileText, xlsx: FileSpreadsheet, eml: Mail,
+    csv: FileSpreadsheet, png: ImageIcon, jpg: ImageIcon, jpeg: ImageIcon, webp: ImageIcon,
   };
   const Icon = formatIcon[format] || File;
 
@@ -229,21 +151,21 @@ export function DocumentPreviewDialog({ open, onOpenChange, document }: Document
               <ZoomIn className="h-3.5 w-3.5" />
             </Button>
           </div>
-          <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs">
-            <Download className="h-3.5 w-3.5" /> Télécharger
-          </Button>
+          {hasRealUrl && (
+            <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs" onClick={handleDownload}>
+              <Download className="h-3.5 w-3.5" /> Télécharger
+            </Button>
+          )}
         </div>
 
         <Separator />
 
-        {/* Preview content */}
         <ScrollArea className="flex-1 min-h-0">
           {renderPreview()}
         </ScrollArea>
 
         <Separator />
 
-        {/* Metadata */}
         <div className="px-5 py-3 bg-secondary/10">
           <p className="text-xs font-medium mb-2 text-muted-foreground">Métadonnées</p>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
