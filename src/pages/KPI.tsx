@@ -1,20 +1,32 @@
 import { useState } from "react";
 import Layout from "@/components/Layout";
 import { Progress } from "@/components/ui/progress";
+import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { TrendingUp, TrendingDown, Minus, EyeOff } from "lucide-react";
 import { EntityActions } from "@/components/EntityActions";
 import { SoftDeleteDialog } from "@/components/SoftDeleteDialog";
 import { useSoftDelete } from "@/hooks/useSoftDelete";
 import { toast } from "sonner";
 
-const kpisData = [
-  { id: "k1", label: "Taux d'avancement global", value: 48, target: 55, unit: "%", trend: "down" },
-  { id: "k2", label: "Livrables validés", value: 4, target: 6, unit: "", trend: "stable" },
-  { id: "k3", label: "Respect des délais", value: 72, target: 90, unit: "%", trend: "down" },
-  { id: "k4", label: "Taux de participation (concertation)", value: 85, target: 70, unit: "%", trend: "up" },
-  { id: "k5", label: "Satisfaction client", value: 4.2, target: 4.0, unit: "/5", trend: "up" },
-  { id: "k6", label: "Budget consommé", value: 42, target: 50, unit: "%", trend: "stable" },
+interface KpiData {
+  id: string;
+  label: string;
+  value: number;
+  target: number;
+  unit: string;
+  trend: string;
+  isDisabled: boolean;
+  usedIn: { dashboards: number; rapports: number };
+}
+
+const kpisData: KpiData[] = [
+  { id: "k1", label: "Taux d'avancement global", value: 48, target: 55, unit: "%", trend: "down", isDisabled: false, usedIn: { dashboards: 2, rapports: 3 } },
+  { id: "k2", label: "Livrables validés", value: 4, target: 6, unit: "", trend: "stable", isDisabled: false, usedIn: { dashboards: 1, rapports: 2 } },
+  { id: "k3", label: "Respect des délais", value: 72, target: 90, unit: "%", trend: "down", isDisabled: false, usedIn: { dashboards: 2, rapports: 4 } },
+  { id: "k4", label: "Taux de participation (concertation)", value: 85, target: 70, unit: "%", trend: "up", isDisabled: false, usedIn: { dashboards: 1, rapports: 1 } },
+  { id: "k5", label: "Satisfaction client", value: 4.2, target: 4.0, unit: "/5", trend: "up", isDisabled: false, usedIn: { dashboards: 1, rapports: 2 } },
+  { id: "k6", label: "Budget consommé", value: 42, target: 50, unit: "%", trend: "stable", isDisabled: false, usedIn: { dashboards: 3, rapports: 5 } },
 ];
 
 const trendIcons: Record<string, typeof TrendingUp> = {
@@ -30,7 +42,8 @@ const trendColors: Record<string, string> = {
 };
 
 export default function KPI() {
-  const [deleteTarget, setDeleteTarget] = useState<(typeof kpisData)[0] | null>(null);
+  const [kpis, setKpis] = useState(kpisData);
+  const [deleteTarget, setDeleteTarget] = useState<KpiData | null>(null);
   const { softDelete, isDeleted } = useSoftDelete();
 
   const handleSoftDelete = () => {
@@ -39,7 +52,18 @@ export default function KPI() {
     setDeleteTarget(null);
   };
 
-  const visibleKpis = kpisData.filter((k) => !isDeleted(k.id));
+  const handleDisable = (kpi: KpiData) => {
+    setKpis((prev) =>
+      prev.map((k) => (k.id === kpi.id ? { ...k, isDisabled: !k.isDisabled } : k))
+    );
+    toast.success(
+      kpi.isDisabled
+        ? `"${kpi.label}" réactivé dans les dashboards`
+        : `"${kpi.label}" désactivé — masqué des dashboards et exports`
+    );
+  };
+
+  const visibleKpis = kpis.filter((k) => !isDeleted(k.id));
 
   return (
     <Layout>
@@ -66,20 +90,39 @@ export default function KPI() {
             const TrendIcon = trendIcons[kpi.trend];
             const isAboveTarget = kpi.value >= kpi.target;
             return (
-              <div key={kpi.id} className="glass-card p-5 animate-slide-up">
+              <div
+                key={kpi.id}
+                className={`glass-card p-5 animate-slide-up ${
+                  kpi.isDisabled ? "opacity-50 border-dashed" : ""
+                }`}
+              >
                 <div className="flex items-start justify-between">
-                  <p className="text-muted-foreground text-xs font-medium leading-tight flex-1">{kpi.label}</p>
+                  <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                    {kpi.isDisabled && <EyeOff className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
+                    <p className="text-muted-foreground text-xs font-medium leading-tight truncate">
+                      {kpi.label}
+                    </p>
+                  </div>
                   <div className="flex items-center gap-1 shrink-0">
                     <TrendIcon className={`h-4 w-4 ${trendColors[kpi.trend]}`} />
                     <EntityActions
                       entityName={kpi.label}
+                      isDisabled={kpi.isDisabled}
                       onEdit={() => toast.info("Modifier : " + kpi.label)}
                       onRename={() => toast.info("Renommer : " + kpi.label)}
                       onDuplicate={() => toast.info("Dupliquer : " + kpi.label)}
+                      onDisable={() => handleDisable(kpi)}
                       onDelete={() => setDeleteTarget(kpi)}
                     />
                   </div>
                 </div>
+
+                {kpi.isDisabled && (
+                  <Badge variant="secondary" className="mt-2 text-[10px] bg-warning/10 text-warning border-0 gap-1">
+                    <EyeOff className="h-3 w-3" /> Désactivé
+                  </Badge>
+                )}
+
                 <div className="mt-3 flex items-baseline gap-1">
                   <span className="font-heading text-3xl font-bold">{kpi.value}</span>
                   <span className="text-muted-foreground text-sm">{kpi.unit}</span>
@@ -95,6 +138,11 @@ export default function KPI() {
                     value={kpi.unit === "%" ? kpi.value : (kpi.value / kpi.target) * 100}
                     className="h-1.5"
                   />
+                </div>
+
+                {/* Usage info */}
+                <div className="mt-3 pt-2 border-t border-border/30 text-[11px] text-muted-foreground">
+                  Utilisé dans {kpi.usedIn.dashboards} dashboard(s) · {kpi.usedIn.rapports} rapport(s)
                 </div>
               </div>
             );

@@ -9,14 +9,26 @@ import { SoftDeleteDialog } from "@/components/SoftDeleteDialog";
 import { useSoftDelete } from "@/hooks/useSoftDelete";
 import { toast } from "sonner";
 
-const documentsData = [
-  { id: "d1", name: "CCTP Mission Mobilité v3", type: "CCTP", format: "pdf", project: "Mobilité Grand Ouest", tags: ["contractuel", "v3"], date: "12 jan 2026", size: "2.4 Mo" },
-  { id: "d2", name: "CR Comité de pilotage #4", type: "CR", format: "docx", project: "Mobilité Grand Ouest", tags: ["COPIL", "phase 2"], date: "8 fév 2026", size: "890 Ko" },
-  { id: "d3", name: "Note de cadrage PLUi", type: "Note", format: "pdf", project: "PLUi Littoral", tags: ["cadrage"], date: "5 mar 2026", size: "1.1 Mo" },
-  { id: "d4", name: "Échange client - retours diagnostic", type: "Email", format: "eml", project: "Mobilité Grand Ouest", tags: ["client", "diagnostic"], date: "10 fév 2026", size: "45 Ko" },
-  { id: "d5", name: "Données enquête ménages", type: "Data", format: "xlsx", project: "Mobilité Grand Ouest", tags: ["données", "enquête"], date: "3 fév 2026", size: "5.8 Mo" },
-  { id: "d6", name: "PV réunion publique #2", type: "CR", format: "pdf", project: "ZAC Centre", tags: ["concertation", "public"], date: "20 jan 2026", size: "1.3 Mo" },
-  { id: "d7", name: "Rapport intermédiaire", type: "Livrable", format: "pdf", project: "ZAC Centre", tags: ["livrable", "v2"], date: "1 fév 2026", size: "4.2 Mo" },
+interface DocData {
+  id: string;
+  name: string;
+  type: string;
+  format: string;
+  project: string;
+  tags: string[];
+  date: string;
+  size: string;
+  versions: number;
+}
+
+const documentsData: DocData[] = [
+  { id: "d1", name: "CCTP Mission Mobilité v3", type: "CCTP", format: "pdf", project: "Mobilité Grand Ouest", tags: ["contractuel", "v3"], date: "12 jan 2026", size: "2.4 Mo", versions: 3 },
+  { id: "d2", name: "CR Comité de pilotage #4", type: "CR", format: "docx", project: "Mobilité Grand Ouest", tags: ["COPIL", "phase 2"], date: "8 fév 2026", size: "890 Ko", versions: 1 },
+  { id: "d3", name: "Note de cadrage PLUi", type: "Note", format: "pdf", project: "PLUi Littoral", tags: ["cadrage"], date: "5 mar 2026", size: "1.1 Mo", versions: 2 },
+  { id: "d4", name: "Échange client - retours diagnostic", type: "Email", format: "eml", project: "Mobilité Grand Ouest", tags: ["client", "diagnostic"], date: "10 fév 2026", size: "45 Ko", versions: 1 },
+  { id: "d5", name: "Données enquête ménages", type: "Data", format: "xlsx", project: "Mobilité Grand Ouest", tags: ["données", "enquête"], date: "3 fév 2026", size: "5.8 Mo", versions: 1 },
+  { id: "d6", name: "PV réunion publique #2", type: "CR", format: "pdf", project: "ZAC Centre", tags: ["concertation", "public"], date: "20 jan 2026", size: "1.3 Mo", versions: 1 },
+  { id: "d7", name: "Rapport intermédiaire", type: "Livrable", format: "pdf", project: "ZAC Centre", tags: ["livrable", "v2"], date: "1 fév 2026", size: "4.2 Mo", versions: 2 },
 ];
 
 const formatIcons: Record<string, typeof FileText> = {
@@ -27,7 +39,7 @@ const formatIcons: Record<string, typeof FileText> = {
 };
 
 export default function Documents() {
-  const [deleteTarget, setDeleteTarget] = useState<(typeof documentsData)[0] | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<DocData | null>(null);
   const { softDelete, isDeleted } = useSoftDelete();
 
   const handleSoftDelete = () => {
@@ -81,7 +93,14 @@ export default function Documents() {
                         <div className="flex items-center gap-3">
                           <Icon className="h-4 w-4 text-muted-foreground shrink-0" />
                           <div className="min-w-0">
-                            <p className="font-medium truncate group-hover:text-primary transition-colors">{doc.name}</p>
+                            <div className="flex items-center gap-1.5">
+                              <p className="font-medium truncate group-hover:text-primary transition-colors">{doc.name}</p>
+                              {doc.versions > 1 && (
+                                <Badge variant="outline" className="text-[9px] shrink-0">
+                                  v{doc.versions}
+                                </Badge>
+                              )}
+                            </div>
                             <p className="text-[11px] text-muted-foreground md:hidden">{doc.project}</p>
                           </div>
                         </div>
@@ -120,6 +139,7 @@ export default function Documents() {
           onOpenChange={(open) => !open && setDeleteTarget(null)}
           entityName={deleteTarget.name}
           entityType="le document"
+          relatedCount={deleteTarget.versions > 1 ? deleteTarget.versions : undefined}
           onConfirm={handleSoftDelete}
         />
       )}
