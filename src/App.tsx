@@ -23,6 +23,7 @@ import Contributions from "./pages/Contributions";
 import Tutorials from "./pages/Tutorials";
 import Diagnostic from "./pages/Diagnostic";
 import NotFound from "./pages/NotFound";
+import PublicForm from "./pages/PublicForm";
 
 const queryClient = new QueryClient();
 
@@ -52,6 +53,7 @@ const App = () => (
             <Route path="/contributions" element={<Contributions />} />
             <Route path="/tutoriels" element={<Tutorials />} />
             <Route path="/diagnostic" element={<Diagnostic />} />
+            <Route path="/s/:token" element={<PublicForm />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
