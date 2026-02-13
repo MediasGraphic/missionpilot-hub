@@ -61,6 +61,7 @@ const secondaryNav: NavItem[] = [
 ];
 
 const adminNav: NavItem[] = [
+  { title: "Tutoriels", url: "/tutoriels", icon: Settings2 },
   { title: "Corbeille", url: "/corbeille", icon: Trash2 },
   { title: "Configuration", url: "/configuration", icon: Settings2 },
   { title: "Administration", url: "/admin", icon: Settings },
