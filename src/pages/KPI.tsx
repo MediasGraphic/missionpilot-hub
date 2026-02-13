@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { TrendingUp, TrendingDown, Minus, EyeOff } from "lucide-react";
 import { EntityActions } from "@/components/EntityActions";
 import { SoftDeleteDialog } from "@/components/SoftDeleteDialog";
+import { RenameDialog } from "@/components/RenameDialog";
 import { useSoftDelete } from "@/hooks/useSoftDelete";
 import { toast } from "sonner";
 
@@ -44,12 +45,19 @@ const trendColors: Record<string, string> = {
 export default function KPI() {
   const [kpis, setKpis] = useState(kpisData);
   const [deleteTarget, setDeleteTarget] = useState<KpiData | null>(null);
+  const [renameTarget, setRenameTarget] = useState<KpiData | null>(null);
   const { softDelete, isDeleted } = useSoftDelete();
 
   const handleSoftDelete = () => {
     if (!deleteTarget) return;
     softDelete({ id: deleteTarget.id, name: deleteTarget.label, type: "kpi" });
     setDeleteTarget(null);
+  };
+
+  const handleRename = (newName: string) => {
+    if (!renameTarget) return;
+    setKpis((prev) => prev.map((k) => (k.id === renameTarget.id ? { ...k, label: newName } : k)));
+    setRenameTarget(null);
   };
 
   const handleDisable = (kpi: KpiData) => {
@@ -109,7 +117,7 @@ export default function KPI() {
                       entityName={kpi.label}
                       isDisabled={kpi.isDisabled}
                       onEdit={() => toast.info("Modifier : " + kpi.label)}
-                      onRename={() => toast.info("Renommer : " + kpi.label)}
+                      onRename={() => setRenameTarget(kpi)}
                       onDuplicate={() => toast.info("Dupliquer : " + kpi.label)}
                       onDisable={() => handleDisable(kpi)}
                       onDelete={() => setDeleteTarget(kpi)}
@@ -140,7 +148,6 @@ export default function KPI() {
                   />
                 </div>
 
-                {/* Usage info */}
                 <div className="mt-3 pt-2 border-t border-border/30 text-[11px] text-muted-foreground">
                   Utilisé dans {kpi.usedIn.dashboards} dashboard(s) · {kpi.usedIn.rapports} rapport(s)
                 </div>
@@ -149,6 +156,14 @@ export default function KPI() {
           })}
         </div>
       </div>
+
+      <RenameDialog
+        open={!!renameTarget}
+        onOpenChange={(open) => !open && setRenameTarget(null)}
+        currentName={renameTarget?.label || ""}
+        entityType="le KPI"
+        onConfirm={handleRename}
+      />
 
       {deleteTarget && (
         <SoftDeleteDialog

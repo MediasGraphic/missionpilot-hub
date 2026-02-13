@@ -42,7 +42,8 @@ const SMOKE_TESTS: SmokeTest[] = [
   {
     id: "crud", module: "CRUD Standard", icon: Database,
     tests: [
-      { label: "Créer / Modifier / Renommer / Dupliquer", status: "ok", detail: "Actions présentes via EntityActions sur toutes les entités (toast de confirmation)." },
+      { label: "Renommer (modal + validation + mise à jour UI)", status: "ok", detail: "RenameDialog avec champ pré-rempli, validation (non vide, 200 car. max), mise à jour immédiate en mémoire." },
+      { label: "Créer / Modifier / Dupliquer", status: "ok", detail: "Actions présentes via EntityActions sur toutes les entités (toast de confirmation)." },
       { label: "Archiver projet", status: "ok", detail: "Projet passe en lecture seule avec badge 'Archivé' et icône cadenas." },
       { label: "Soft delete + toast UNDO 8s", status: "ok", detail: "useSoftDelete affiche un toast avec bouton 'Annuler' pendant 8 secondes." },
       { label: "Corbeille : restaurer", status: "ok", detail: "Page Corbeille permet la restauration de tous types d'entités." },
@@ -55,6 +56,7 @@ const SMOKE_TESTS: SmokeTest[] = [
     id: "projects", module: "Projets", icon: FileText,
     tests: [
       { label: "Liste projets avec progression", status: "ok", detail: "4 projets mock affichés avec barre de progression et infos." },
+      { label: "Renommer projet", status: "ok", detail: "RenameDialog ouvre modal pré-rempli, valide et met à jour le nom dans la liste." },
       { label: "Archivage / Désarchivage", status: "ok", detail: "Toggle archivage fonctionnel avec toast de confirmation." },
       { label: "Soft delete projet", status: "ok", detail: "Suppression avec confirmation et toast UNDO." },
       { label: "Recherche / Filtres", status: "ok", detail: "Champ de recherche présent (filtrage côté client)." },
@@ -63,10 +65,12 @@ const SMOKE_TESTS: SmokeTest[] = [
   {
     id: "documents", module: "Documents", icon: FileText,
     tests: [
+      { label: "Arborescence dossiers", status: "ok", detail: "Dossiers créables, navigables avec breadcrumb, renommables et supprimables." },
+      { label: "Renommer document / dossier", status: "ok", detail: "RenameDialog avec validation, mise à jour immédiate dans le tableau." },
       { label: "Liste avec versioning badge", status: "ok", detail: "Documents multi-versions affichent un badge vX." },
       { label: "Tags affichés", status: "ok", detail: "Tags visibles dans le tableau des documents." },
       { label: "Upload réel", status: "ko", detail: "Bouton 'Importer' présent mais pas de storage bucket configuré." },
-      { label: "Soft delete", status: "ok", detail: "Suppression avec alerte versions multiples." },
+      { label: "Soft delete fichier + dossier", status: "ok", detail: "Suppression avec impact (fichiers dans dossier) et toast UNDO." },
       { label: "Preview PDF", status: "ok", detail: "Aperçu PDF intégré avec pagination, zoom et téléchargement." },
       { label: "Preview Image (png/jpg/webp)", status: "ok", detail: "Aperçu image avec zoom intégré." },
       { label: "Preview CSV/Texte", status: "ok", detail: "Aperçu en tableau (CSV) ou texte brut." },
@@ -89,6 +93,8 @@ const SMOKE_TESTS: SmokeTest[] = [
     id: "questionnaires", module: "Questionnaires", icon: ClipboardList,
     tests: [
       { label: "Builder type Google Forms", status: "ok", detail: "9 types de questions, sections, required, options." },
+      { label: "Renommer questionnaire", status: "ok", detail: "RenameDialog avec validation et mise à jour immédiate." },
+      { label: "Preview formulaire (desktop + mobile)", status: "ok", detail: "Onglet Aperçu affiche le formulaire tel que vu par un répondant, avec toggle desktop/mobile." },
       { label: "Génération IA", status: "ok", detail: "Onglet IA avec prompt → génération simulée (mock)." },
       { label: "Import CSV", status: "warn", detail: "Bouton présent, toast info affiché, mais pas de parsing CSV réel." },
       { label: "Partage (Public/Restreint/Email)", status: "ok", detail: "3 modes d'accès configurables, lien de partage généré." },
@@ -101,6 +107,7 @@ const SMOKE_TESTS: SmokeTest[] = [
     id: "kpi", module: "KPI & Dashboards", icon: BarChart3,
     tests: [
       { label: "Liste KPI avec objectif/tendance", status: "ok", detail: "6 KPI mock avec progress bars et indicateurs tendance." },
+      { label: "Renommer KPI", status: "ok", detail: "RenameDialog met à jour le label du KPI dans la grille." },
       { label: "Désactiver KPI", status: "ok", detail: "Action 'Désactiver' via EntityActions, badge 'Désactivé' + opacité réduite." },
       { label: "Usages (dashboards/rapports)", status: "ok", detail: "Chaque KPI affiche le nombre de dashboards et rapports." },
       { label: "Filtre par projet", status: "ok", detail: "Select 'Tous les projets' avec options de filtrage." },

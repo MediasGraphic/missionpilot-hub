@@ -7,10 +7,11 @@ import { EntityActions } from "@/components/EntityActions";
 import { SoftDeleteDialog } from "@/components/SoftDeleteDialog";
 import { DocumentPreviewDialog, type DocumentMeta } from "@/components/DocumentPreviewDialog";
 import { ReportExportDialog } from "@/components/ReportExportDialog";
+import { RenameDialog } from "@/components/RenameDialog";
 import { useSoftDelete } from "@/hooks/useSoftDelete";
 import { toast } from "sonner";
 
-const reportsData = [
+const initialReportsData = [
   { id: "r1", name: "Rapport d'avancement mensuel – Janvier 2026", type: "Avancement", project: "Mobilité Grand Ouest", date: "31 jan 2026", pages: 12 },
   { id: "r2", name: "Bilan de concertation intermédiaire", type: "Concertation", project: "ZAC Centre", date: "25 jan 2026", pages: 24 },
   { id: "r3", name: "Synthèse COPIL #3", type: "COPIL", project: "Mobilité Grand Ouest", date: "20 jan 2026", pages: 8 },
@@ -27,7 +28,9 @@ const typeIcons: Record<string, typeof FileText> = {
 };
 
 export default function Reports() {
-  const [deleteTarget, setDeleteTarget] = useState<(typeof reportsData)[0] | null>(null);
+  const [reports, setReports] = useState(initialReportsData);
+  const [deleteTarget, setDeleteTarget] = useState<(typeof initialReportsData)[0] | null>(null);
+  const [renameTarget, setRenameTarget] = useState<(typeof initialReportsData)[0] | null>(null);
   const [previewDoc, setPreviewDoc] = useState<DocumentMeta | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
   const { softDelete, isDeleted } = useSoftDelete();
@@ -38,7 +41,13 @@ export default function Reports() {
     setDeleteTarget(null);
   };
 
-  const visibleReports = reportsData.filter((r) => !isDeleted(r.id));
+  const handleRename = (newName: string) => {
+    if (!renameTarget) return;
+    setReports((prev) => prev.map((r) => (r.id === renameTarget.id ? { ...r, name: newName } : r)));
+    setRenameTarget(null);
+  };
+
+  const visibleReports = reports.filter((r) => !isDeleted(r.id));
 
   return (
     <Layout>
@@ -96,7 +105,7 @@ export default function Reports() {
                     <EntityActions
                       entityName={report.name}
                       onEdit={() => toast.info("Modifier : " + report.name)}
-                      onRename={() => toast.info("Renommer : " + report.name)}
+                      onRename={() => setRenameTarget(report)}
                       onDuplicate={() => toast.info("Dupliquer : " + report.name)}
                       onDelete={() => setDeleteTarget(report)}
                     />
@@ -117,6 +126,14 @@ export default function Reports() {
       <ReportExportDialog
         open={exportOpen}
         onOpenChange={setExportOpen}
+      />
+
+      <RenameDialog
+        open={!!renameTarget}
+        onOpenChange={(open) => !open && setRenameTarget(null)}
+        currentName={renameTarget?.name || ""}
+        entityType="le rapport"
+        onConfirm={handleRename}
       />
 
       {deleteTarget && (
