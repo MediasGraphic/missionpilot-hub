@@ -1,5 +1,6 @@
 import { useState } from "react";
 import Layout from "@/components/Layout";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -340,26 +341,48 @@ export default function Questionnaires() {
       return;
     }
     setIsGenerating(true);
-    // Simulate AI generation
-    await new Promise((r) => setTimeout(r, 2000));
 
-    const generated: Question[] = [
-      { id: `q_${Date.now()}_1`, sectionId: "s1", type: "text", label: "Votre commune de résidence", required: true },
-      { id: `q_${Date.now()}_2`, sectionId: "s1", type: "single_choice", label: "Votre tranche d'âge", required: true, options: [{ id: "o1", label: "Moins de 25 ans" }, { id: "o2", label: "25-45 ans" }, { id: "o3", label: "45-65 ans" }, { id: "o4", label: "Plus de 65 ans" }] },
-      { id: `q_${Date.now()}_3`, sectionId: "s1", type: "scale", label: "Satisfaction globale du projet", required: true, scaleMin: 1, scaleMax: 5 },
-      { id: `q_${Date.now()}_4`, sectionId: "s1", type: "multiple_choice", label: "Thèmes prioritaires pour vous", required: false, options: [{ id: "o5", label: "Environnement" }, { id: "o6", label: "Transport" }, { id: "o7", label: "Logement" }, { id: "o8", label: "Emploi" }, { id: "o9", label: "Culture & loisirs" }] },
-      { id: `q_${Date.now()}_5`, sectionId: "s1", type: "long_text", label: "Vos propositions et remarques", required: false, placeholder: "Exprimez-vous librement..." },
-      { id: `q_${Date.now()}_6`, sectionId: "s1", type: "consent", label: "J'accepte le traitement de mes données conformément au RGPD", required: true },
-    ];
+    try {
+      const { data, error } = await supabase.functions.invoke("generate-questionnaire", {
+        body: { prompt: aiPrompt },
+      });
 
-    setBuilderTitle("Questionnaire généré par IA");
-    setBuilderDesc(aiPrompt);
-    setBuilderSections([{ id: "s1", title: "Questionnaire" }]);
-    setBuilderQuestions(generated);
-    setBuilderMode(true);
-    setActiveTab("builder");
-    setIsGenerating(false);
-    toast.success("Questionnaire généré ! Vous pouvez l'éditer avant publication.");
+      if (error) throw error;
+
+      const title = data.title || "Questionnaire généré par IA";
+      const description = data.description || "";
+      const sections: Section[] = (data.sections || []).map((s: any, i: number) => ({
+        id: s.id || `s_${Date.now()}_${i}`,
+        title: s.title || `Section ${i + 1}`,
+        description: s.description,
+      }));
+      const questions: Question[] = (data.questions || []).map((q: any, i: number) => ({
+        id: q.id || `q_${Date.now()}_${i}`,
+        sectionId: q.sectionId || sections[0]?.id || "s1",
+        type: q.type || "text",
+        label: q.label || "",
+        description: q.description,
+        placeholder: q.placeholder,
+        required: q.required ?? false,
+        options: q.options,
+        scaleMin: q.scaleMin,
+        scaleMax: q.scaleMax,
+        conditionalOn: q.conditionalOn || null,
+      }));
+
+      setBuilderTitle(title);
+      setBuilderDesc(description);
+      setBuilderSections(sections.length > 0 ? sections : [{ id: "s1", title: "Questionnaire" }]);
+      setBuilderQuestions(questions);
+      setBuilderMode(true);
+      setActiveTab("builder");
+      toast.success("Questionnaire généré ! Vous pouvez l'éditer avant publication.");
+    } catch (err: any) {
+      console.error("AI generation error:", err);
+      toast.error(err.message || "Erreur lors de la génération du questionnaire.");
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   const handleCSVImport = () => {
