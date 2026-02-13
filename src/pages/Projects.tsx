@@ -7,6 +7,7 @@ import { Plus, Search, Filter, Lock, Archive } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { EntityActions } from "@/components/EntityActions";
 import { SoftDeleteDialog } from "@/components/SoftDeleteDialog";
+import { RenameDialog } from "@/components/RenameDialog";
 import { useSoftDelete } from "@/hooks/useSoftDelete";
 import { toast } from "sonner";
 
@@ -43,12 +44,19 @@ const typeColors: Record<string, string> = {
 export default function Projects() {
   const [projects, setProjects] = useState(projectsData);
   const [deleteTarget, setDeleteTarget] = useState<ProjectData | null>(null);
+  const [renameTarget, setRenameTarget] = useState<ProjectData | null>(null);
   const { softDelete, isDeleted } = useSoftDelete();
 
   const handleSoftDelete = () => {
     if (!deleteTarget) return;
     softDelete({ id: deleteTarget.id, name: deleteTarget.name, type: "projet" });
     setDeleteTarget(null);
+  };
+
+  const handleRename = (newName: string) => {
+    if (!renameTarget) return;
+    setProjects((prev) => prev.map((p) => (p.id === renameTarget.id ? { ...p, name: newName } : p)));
+    setRenameTarget(null);
   };
 
   const handleArchive = (project: ProjectData) => {
@@ -95,17 +103,13 @@ export default function Projects() {
             <div
               key={project.id}
               className={`glass-card p-5 transition-all cursor-pointer group animate-slide-up ${
-                project.isArchived
-                  ? "border-muted/50 opacity-75"
-                  : "hover:border-primary/30"
+                project.isArchived ? "border-muted/50 opacity-75" : "hover:border-primary/30"
               }`}
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    {project.isArchived && (
-                      <Lock className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                    )}
+                    {project.isArchived && <Lock className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
                     <h3 className="font-heading font-semibold group-hover:text-primary transition-colors truncate">
                       {project.name}
                     </h3>
@@ -128,7 +132,7 @@ export default function Projects() {
                     readOnly={project.isArchived}
                     isArchived={project.isArchived}
                     onEdit={project.isArchived ? undefined : () => toast.info("Modifier : " + project.name)}
-                    onRename={project.isArchived ? undefined : () => toast.info("Renommer : " + project.name)}
+                    onRename={project.isArchived ? undefined : () => setRenameTarget(project)}
                     onDuplicate={project.isArchived ? undefined : () => toast.info("Dupliquer : " + project.name)}
                     onArchive={() => handleArchive(project)}
                     onDelete={project.isArchived ? undefined : () => setDeleteTarget(project)}
@@ -168,6 +172,14 @@ export default function Projects() {
           ))}
         </div>
       </div>
+
+      <RenameDialog
+        open={!!renameTarget}
+        onOpenChange={(open) => !open && setRenameTarget(null)}
+        currentName={renameTarget?.name || ""}
+        entityType="le projet"
+        onConfirm={handleRename}
+      />
 
       {deleteTarget && (
         <SoftDeleteDialog

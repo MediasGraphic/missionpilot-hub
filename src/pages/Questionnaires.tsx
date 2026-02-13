@@ -9,6 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Separator } from "@/components/ui/separator";
 import {
   ClipboardList,
   Plus,
@@ -37,9 +39,12 @@ import {
   Loader2,
   ExternalLink,
   X,
+  Smartphone,
+  Monitor,
 } from "lucide-react";
 import { EntityActions } from "@/components/EntityActions";
 import { SoftDeleteDialog } from "@/components/SoftDeleteDialog";
+import { RenameDialog } from "@/components/RenameDialog";
 import { useSoftDelete } from "@/hooks/useSoftDelete";
 import { toast } from "sonner";
 
@@ -201,6 +206,9 @@ export default function Questionnaires() {
   const [questionnaires, setQuestionnaires] = useState(MOCK_QUESTIONNAIRES);
   const [activeTab, setActiveTab] = useState("list");
   const [deleteTarget, setDeleteTarget] = useState<Questionnaire | null>(null);
+  const [renameTarget, setRenameTarget] = useState<Questionnaire | null>(null);
+  const [previewQ, setPreviewQ] = useState<Questionnaire | null>(null);
+  const [previewDevice, setPreviewDevice] = useState<"desktop" | "mobile">("desktop");
   const { softDelete, isDeleted } = useSoftDelete();
 
   /* ── Builder state ── */
@@ -416,6 +424,10 @@ export default function Questionnaires() {
               <Settings2 className="h-3.5 w-3.5" />
               Builder
             </TabsTrigger>
+            <TabsTrigger value="preview" className="gap-1.5 text-xs" disabled={!previewQ && !builderMode}>
+              <Eye className="h-3.5 w-3.5" />
+              Aperçu
+            </TabsTrigger>
             <TabsTrigger value="ai" className="gap-1.5 text-xs">
               <Bot className="h-3.5 w-3.5" />
               Générer via IA
@@ -483,6 +495,15 @@ export default function Questionnaires() {
                         </div>
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="text-xs gap-1 h-7"
+                          onClick={(e) => { e.stopPropagation(); setPreviewQ(q); setActiveTab("preview"); }}
+                        >
+                          <Eye className="h-3 w-3" />
+                          Aperçu
+                        </Button>
                         {q.status === "brouillon" && (
                           <Button
                             size="sm"
@@ -508,7 +529,7 @@ export default function Questionnaires() {
                         <EntityActions
                           entityName={q.title}
                           onEdit={() => openBuilder(q)}
-                          onRename={() => toast.info("Renommer : " + q.title)}
+                          onRename={() => setRenameTarget(q)}
                           onDuplicate={() => {
                             const dup = { ...q, id: `q_${Date.now()}`, title: q.title + " (copie)", status: "brouillon" as const, responsesCount: 0 };
                             setQuestionnaires((prev) => [...prev, dup]);
@@ -837,6 +858,152 @@ export default function Questionnaires() {
             )}
           </TabsContent>
 
+          {/* ── PREVIEW ── */}
+          <TabsContent value="preview" className="mt-4 space-y-4">
+            {(() => {
+              const qToPreview = previewQ || (builderMode ? {
+                id: "preview",
+                title: builderTitle || "Sans titre",
+                description: builderDesc,
+                project: "",
+                status: "brouillon" as const,
+                version: 1,
+                sections: builderSections,
+                questions: builderQuestions,
+                access: builderAccess,
+                collectIdentity: builderCollectIdentity,
+                responsesCount: 0,
+                createdAt: "",
+              } : null);
+
+              if (!qToPreview) {
+                return (
+                  <div className="glass-card p-12 text-center">
+                    <Eye className="h-10 w-10 text-muted-foreground/30 mx-auto mb-3" />
+                    <p className="text-muted-foreground text-sm">Sélectionnez un questionnaire pour afficher l'aperçu.</p>
+                  </div>
+                );
+              }
+
+              return (
+                <>
+                  <div className="flex items-center justify-between">
+                    <h2 className="font-heading text-sm font-semibold">Aperçu du formulaire</h2>
+                    <div className="flex items-center gap-1 bg-secondary/50 rounded-lg p-0.5">
+                      <Button
+                        variant={previewDevice === "desktop" ? "default" : "ghost"}
+                        size="sm"
+                        className="h-7 gap-1 text-xs"
+                        onClick={() => setPreviewDevice("desktop")}
+                      >
+                        <Monitor className="h-3 w-3" /> Desktop
+                      </Button>
+                      <Button
+                        variant={previewDevice === "mobile" ? "default" : "ghost"}
+                        size="sm"
+                        className="h-7 gap-1 text-xs"
+                        onClick={() => setPreviewDevice("mobile")}
+                      >
+                        <Smartphone className="h-3 w-3" /> Mobile
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className={`mx-auto transition-all ${previewDevice === "mobile" ? "max-w-sm" : "max-w-2xl"}`}>
+                    <div className="glass-card p-6 space-y-6 glow-border">
+                      <div>
+                        <h2 className="font-heading text-xl font-bold">{qToPreview.title}</h2>
+                        {qToPreview.description && (
+                          <p className="text-sm text-muted-foreground mt-1">{qToPreview.description}</p>
+                        )}
+                        <Separator className="mt-4" />
+                      </div>
+
+                      {qToPreview.sections.map((section) => {
+                        const sectionQuestions = qToPreview.questions.filter((q) => q.sectionId === section.id);
+                        if (sectionQuestions.length === 0) return null;
+                        return (
+                          <div key={section.id} className="space-y-4">
+                            <h3 className="font-heading text-sm font-semibold text-primary">{section.title}</h3>
+                            {sectionQuestions.map((q) => (
+                              <div key={q.id} className="space-y-1.5">
+                                <Label className="text-sm">
+                                  {q.label || "Question sans titre"}
+                                  {q.required && <span className="text-destructive ml-0.5">*</span>}
+                                </Label>
+                                {q.description && <p className="text-xs text-muted-foreground">{q.description}</p>}
+
+                                {q.type === "text" && (
+                                  <Input placeholder={q.placeholder || "Votre réponse"} disabled className="bg-secondary/20" />
+                                )}
+                                {q.type === "long_text" && (
+                                  <Textarea placeholder={q.placeholder || "Votre réponse..."} disabled className="bg-secondary/20 min-h-[80px]" />
+                                )}
+                                {q.type === "single_choice" && (
+                                  <RadioGroup disabled className="space-y-1.5">
+                                    {(q.options || []).map((opt) => (
+                                      <div key={opt.id} className="flex items-center gap-2">
+                                        <RadioGroupItem value={opt.id} disabled />
+                                        <Label className="text-sm font-normal">{opt.label || "Option"}</Label>
+                                      </div>
+                                    ))}
+                                  </RadioGroup>
+                                )}
+                                {q.type === "multiple_choice" && (
+                                  <div className="space-y-1.5">
+                                    {(q.options || []).map((opt) => (
+                                      <div key={opt.id} className="flex items-center gap-2">
+                                        <Checkbox disabled />
+                                        <Label className="text-sm font-normal">{opt.label || "Option"}</Label>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                                {q.type === "dropdown" && (
+                                  <Select disabled>
+                                    <SelectTrigger className="bg-secondary/20"><SelectValue placeholder="Sélectionnez..." /></SelectTrigger>
+                                    <SelectContent>
+                                      {(q.options || []).map((opt) => (
+                                        <SelectItem key={opt.id} value={opt.id}>{opt.label}</SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                )}
+                                {q.type === "scale" && (
+                                  <div className="flex items-center gap-2">
+                                    {Array.from({ length: (q.scaleMax || 5) - (q.scaleMin || 1) + 1 }, (_, i) => (q.scaleMin || 1) + i).map((n) => (
+                                      <Button key={n} variant="outline" size="sm" className="h-8 w-8 text-xs" disabled>{n}</Button>
+                                    ))}
+                                  </div>
+                                )}
+                                {q.type === "date" && (
+                                  <Input type="date" disabled className="bg-secondary/20 max-w-[200px]" />
+                                )}
+                                {q.type === "consent" && (
+                                  <div className="flex items-start gap-2">
+                                    <Checkbox disabled />
+                                    <Label className="text-sm font-normal">{q.label}</Label>
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })}
+
+                      <div className="pt-4">
+                        <Button disabled className="gap-2">
+                          <CheckCircle2 className="h-4 w-4" />
+                          Soumettre
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
+          </TabsContent>
+
           {/* ── AI GENERATION ── */}
           <TabsContent value="ai" className="mt-4 space-y-4">
             <div className="glass-card p-5 glow-border">
@@ -955,6 +1122,18 @@ export default function Questionnaires() {
           </TabsContent>
         </Tabs>
       </div>
+
+      <RenameDialog
+        open={!!renameTarget}
+        onOpenChange={(open) => !open && setRenameTarget(null)}
+        currentName={renameTarget?.title || ""}
+        entityType="le questionnaire"
+        onConfirm={(newName) => {
+          if (!renameTarget) return;
+          setQuestionnaires((prev) => prev.map((q) => (q.id === renameTarget.id ? { ...q, title: newName } : q)));
+          setRenameTarget(null);
+        }}
+      />
 
       {deleteTarget && (
         <SoftDeleteDialog
