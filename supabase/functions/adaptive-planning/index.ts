@@ -12,10 +12,122 @@ serve(async (req) => {
   }
 
   try {
-    const { prompt } = await req.json();
+    const { prompt, mode } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
+    // Mode "generate" = structured planning output via tool calling
+    if (mode === "generate") {
+      const systemPrompt = `Tu es un expert en gestion de projet d'études et concertation publique.
+L'utilisateur te décrit son projet. Tu dois générer un planning structuré avec des phases et des tâches.
+Utilise la fonction generate_planning pour retourner le résultat.
+Règles :
+- Chaque phase contient des tâches séquentielles.
+- Les durées sont en jours ouvrés.
+- Inclus des livrables clés quand pertinent.
+- Sois réaliste sur les durées.
+- Réponds en français.`;
+
+      const response = await fetch(
+        "https://ai.gateway.lovable.dev/v1/chat/completions",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${LOVABLE_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "google/gemini-3-flash-preview",
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: prompt },
+            ],
+            tools: [
+              {
+                type: "function",
+                function: {
+                  name: "generate_planning",
+                  description: "Génère un planning structuré avec phases et tâches",
+                  parameters: {
+                    type: "object",
+                    properties: {
+                      summary: {
+                        type: "string",
+                        description: "Résumé court du planning proposé (1-2 phrases)",
+                      },
+                      phases: {
+                        type: "array",
+                        items: {
+                          type: "object",
+                          properties: {
+                            name: { type: "string", description: "Nom de la phase" },
+                            tasks: {
+                              type: "array",
+                              items: {
+                                type: "object",
+                                properties: {
+                                  name: { type: "string", description: "Nom de la tâche" },
+                                  duration: { type: "number", description: "Durée en jours ouvrés" },
+                                  deliverable: { type: "string", description: "Livrable associé (optionnel)" },
+                                },
+                                required: ["name", "duration"],
+                                additionalProperties: false,
+                              },
+                            },
+                          },
+                          required: ["name", "tasks"],
+                          additionalProperties: false,
+                        },
+                      },
+                    },
+                    required: ["summary", "phases"],
+                    additionalProperties: false,
+                  },
+                },
+              },
+            ],
+            tool_choice: { type: "function", function: { name: "generate_planning" } },
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        if (response.status === 429) {
+          return new Response(JSON.stringify({ error: "Rate limit exceeded" }), {
+            status: 429,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        if (response.status === 402) {
+          return new Response(JSON.stringify({ error: "Payment required" }), {
+            status: 402,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        const t = await response.text();
+        console.error("AI gateway error:", response.status, t);
+        return new Response(JSON.stringify({ error: "AI gateway error" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const data = await response.json();
+      const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
+      if (!toolCall) {
+        return new Response(JSON.stringify({ error: "No structured response from AI" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const planning = JSON.parse(toolCall.function.arguments);
+      return new Response(JSON.stringify(planning), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Default mode: streaming text advice
     const systemPrompt = `Tu es un assistant IA expert en gestion de projet d'études et concertation publique.
 Tu analyses les plannings, les contraintes et les risques pour proposer des ajustements concrets.
 
@@ -47,23 +159,23 @@ Règles :
 
     if (!response.ok) {
       if (response.status === 429) {
-        return new Response(
-          JSON.stringify({ error: "Rate limit exceeded" }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        return new Response(JSON.stringify({ error: "Rate limit exceeded" }), {
+          status: 429,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
       if (response.status === 402) {
-        return new Response(
-          JSON.stringify({ error: "Payment required" }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        return new Response(JSON.stringify({ error: "Payment required" }), {
+          status: 402,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
       const t = await response.text();
       console.error("AI gateway error:", response.status, t);
-      return new Response(
-        JSON.stringify({ error: "AI gateway error" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: "AI gateway error" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     return new Response(response.body, {

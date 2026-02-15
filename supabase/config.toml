@@ -2,3 +2,6 @@ project_id = "eleqgtdummigwfsksxkv"
 
 [functions.questionnaire-public]
 verify_jwt = false
+
+[functions.adaptive-planning]
+verify_jwt = false
