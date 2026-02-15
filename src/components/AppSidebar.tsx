@@ -46,7 +46,6 @@ const mainNav: NavItem[] = [
   { title: "Tableau de bord", url: "/", icon: LayoutDashboard },
   { title: "Projets", url: "/projets", icon: FolderKanban },
   { title: "Planning", url: "/planning", icon: CalendarRange, moduleKey: "planning" },
-  { title: "Planning IA", url: "/planning-ia", icon: Sparkles, moduleKey: "planning" },
   { title: "Livrables", url: "/livrables", icon: Package, moduleKey: "livrables" },
   { title: "Documents", url: "/documents", icon: FileText, moduleKey: "documents" },
   { title: "Assistant IA", url: "/assistant-ia", icon: Bot },

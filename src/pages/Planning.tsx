@@ -1,155 +1,139 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import Layout from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
   Bot,
-  ChevronLeft,
-  ChevronRight,
   Plus,
   CalendarRange,
   Settings2,
   GitBranch,
   Save,
   RefreshCcw,
-  Milestone,
+  Flag,
+  Lock,
   Link2,
   Users,
   Calendar,
   Loader2,
   Sparkles,
   ArrowRight,
-  Flag,
-  Lock,
+  ArrowLeft,
+  Trash2,
+  Edit3,
+  Copy,
+  Send,
+  ChevronDown,
+  GripVertical,
+  Target,
+  Undo2,
+  Download,
+  FolderKanban,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
-
-/* ── Types ── */
-interface PlanningTask {
-  id: string;
-  name: string;
-  phaseId: string;
-  startDay: number;
-  duration: number;
-  status: "done" | "active" | "upcoming";
-  deliverable?: string;
-  dependsOn?: string[];
-  isDeliverable?: boolean;
-  isMilestone?: boolean;
-}
-
-interface Phase {
-  id: string;
-  name: string;
-  color: string;
-}
-
-interface Constraint {
-  id: string;
-  type: "end_date" | "milestone" | "dependency" | "resource";
-  label: string;
-  enabled: boolean;
-  value: string;
-}
+import { usePlanningData, type PlanningPhase, type PlanningTask } from "@/hooks/usePlanningData";
+import { supabase } from "@/integrations/supabase/client";
+import { Textarea } from "@/components/ui/textarea";
 
 /* ── Templates ── */
-const TEMPLATES: Record<string, { label: string; phases: Phase[]; tasks: PlanningTask[] }> = {
+const TEMPLATES: Record<string, { label: string; phases: { name: string; tasks: { name: string; duration: number; deliverable?: string; isMilestone?: boolean }[] }[] }> = {
   "etude-enquete": {
     label: "Étude + enquête terrain",
     phases: [
-      { id: "p1", name: "Cadrage", color: "bg-info" },
-      { id: "p2", name: "Diagnostic", color: "bg-primary" },
-      { id: "p3", name: "Enquête terrain", color: "bg-warning" },
-      { id: "p4", name: "Analyse", color: "bg-accent-foreground" },
-      { id: "p5", name: "Restitution", color: "bg-success" },
-    ],
-    tasks: [
-      { id: "t1", name: "Réunion de lancement", phaseId: "p1", startDay: 0, duration: 5, status: "upcoming", isMilestone: true },
-      { id: "t2", name: "Note de cadrage", phaseId: "p1", startDay: 5, duration: 10, status: "upcoming", deliverable: "Note de cadrage" },
-      { id: "t3", name: "Revue documentaire", phaseId: "p2", startDay: 15, duration: 20, status: "upcoming" },
-      { id: "t4", name: "Entretiens parties prenantes", phaseId: "p2", startDay: 20, duration: 15, status: "upcoming" },
-      { id: "t5", name: "Rapport diagnostic", phaseId: "p2", startDay: 35, duration: 10, status: "upcoming", deliverable: "Rapport diagnostic", dependsOn: ["t3", "t4"] },
-      { id: "t6", name: "Conception questionnaire", phaseId: "p3", startDay: 45, duration: 10, status: "upcoming", dependsOn: ["t5"] },
-      { id: "t7", name: "Administration terrain", phaseId: "p3", startDay: 55, duration: 25, status: "upcoming", dependsOn: ["t6"] },
-      { id: "t8", name: "Saisie & nettoyage", phaseId: "p3", startDay: 80, duration: 10, status: "upcoming", dependsOn: ["t7"] },
-      { id: "t9", name: "Analyse statistique", phaseId: "p4", startDay: 90, duration: 20, status: "upcoming", dependsOn: ["t8"] },
-      { id: "t10", name: "Rapport d'analyse", phaseId: "p4", startDay: 110, duration: 15, status: "upcoming", deliverable: "Rapport d'analyse", dependsOn: ["t9"] },
-      { id: "t11", name: "Présentation résultats", phaseId: "p5", startDay: 125, duration: 5, status: "upcoming", isMilestone: true, dependsOn: ["t10"] },
-      { id: "t12", name: "Rapport final", phaseId: "p5", startDay: 130, duration: 15, status: "upcoming", deliverable: "Rapport final", isDeliverable: true, dependsOn: ["t11"] },
+      { name: "Cadrage", tasks: [
+        { name: "Réunion de lancement", duration: 5, isMilestone: true },
+        { name: "Note de cadrage", duration: 10, deliverable: "Note de cadrage" },
+      ]},
+      { name: "Diagnostic", tasks: [
+        { name: "Revue documentaire", duration: 20 },
+        { name: "Entretiens parties prenantes", duration: 15 },
+        { name: "Rapport diagnostic", duration: 10, deliverable: "Rapport diagnostic" },
+      ]},
+      { name: "Enquête terrain", tasks: [
+        { name: "Conception questionnaire", duration: 10 },
+        { name: "Administration terrain", duration: 25 },
+        { name: "Saisie & nettoyage", duration: 10 },
+      ]},
+      { name: "Analyse", tasks: [
+        { name: "Analyse statistique", duration: 20 },
+        { name: "Rapport d'analyse", duration: 15, deliverable: "Rapport d'analyse" },
+      ]},
+      { name: "Restitution", tasks: [
+        { name: "Présentation résultats", duration: 5, isMilestone: true },
+        { name: "Rapport final", duration: 15, deliverable: "Rapport final" },
+      ]},
     ],
   },
   "concertation-multi": {
-    label: "Concertation publique multi-événements",
+    label: "Concertation publique",
     phases: [
-      { id: "p1", name: "Préparation", color: "bg-info" },
-      { id: "p2", name: "Information", color: "bg-primary" },
-      { id: "p3", name: "Concertation", color: "bg-warning" },
-      { id: "p4", name: "Synthèse", color: "bg-accent-foreground" },
-      { id: "p5", name: "Bilan", color: "bg-success" },
-    ],
-    tasks: [
-      { id: "t1", name: "Cadrage dispositif", phaseId: "p1", startDay: 0, duration: 15, status: "upcoming" },
-      { id: "t2", name: "Plan de concertation", phaseId: "p1", startDay: 10, duration: 10, status: "upcoming", deliverable: "Plan de concertation" },
-      { id: "t3", name: "Supports d'information", phaseId: "p2", startDay: 20, duration: 15, status: "upcoming", dependsOn: ["t2"] },
-      { id: "t4", name: "Réunion publique d'info", phaseId: "p2", startDay: 35, duration: 3, status: "upcoming", isMilestone: true, dependsOn: ["t3"] },
-      { id: "t5", name: "Atelier participatif #1", phaseId: "p3", startDay: 45, duration: 5, status: "upcoming", dependsOn: ["t4"] },
-      { id: "t6", name: "Atelier participatif #2", phaseId: "p3", startDay: 60, duration: 5, status: "upcoming", dependsOn: ["t5"] },
-      { id: "t7", name: "Atelier participatif #3", phaseId: "p3", startDay: 75, duration: 5, status: "upcoming", dependsOn: ["t6"] },
-      { id: "t8", name: "Permanence publique", phaseId: "p3", startDay: 55, duration: 30, status: "upcoming" },
-      { id: "t9", name: "Analyse contributions", phaseId: "p4", startDay: 85, duration: 20, status: "upcoming", dependsOn: ["t7"] },
-      { id: "t10", name: "Rapport de synthèse", phaseId: "p4", startDay: 105, duration: 15, status: "upcoming", deliverable: "Rapport de synthèse", dependsOn: ["t9"] },
-      { id: "t11", name: "Bilan de concertation", phaseId: "p5", startDay: 120, duration: 10, status: "upcoming", deliverable: "Bilan", isDeliverable: true, dependsOn: ["t10"] },
-    ],
-  },
-  "communication-multicanal": {
-    label: "Communication multicanal",
-    phases: [
-      { id: "p1", name: "Stratégie", color: "bg-info" },
-      { id: "p2", name: "Création", color: "bg-primary" },
-      { id: "p3", name: "Déploiement", color: "bg-warning" },
-      { id: "p4", name: "Évaluation", color: "bg-success" },
-    ],
-    tasks: [
-      { id: "t1", name: "Diagnostic communication", phaseId: "p1", startDay: 0, duration: 15, status: "upcoming" },
-      { id: "t2", name: "Stratégie & plan média", phaseId: "p1", startDay: 10, duration: 15, status: "upcoming", deliverable: "Stratégie com" },
-      { id: "t3", name: "Création graphique", phaseId: "p2", startDay: 25, duration: 20, status: "upcoming", dependsOn: ["t2"] },
-      { id: "t4", name: "Rédaction contenus", phaseId: "p2", startDay: 25, duration: 20, status: "upcoming", dependsOn: ["t2"] },
-      { id: "t5", name: "Développement web", phaseId: "p2", startDay: 35, duration: 15, status: "upcoming", dependsOn: ["t3"] },
-      { id: "t6", name: "Campagne print", phaseId: "p3", startDay: 50, duration: 20, status: "upcoming", dependsOn: ["t3", "t4"] },
-      { id: "t7", name: "Campagne digitale", phaseId: "p3", startDay: 50, duration: 30, status: "upcoming", dependsOn: ["t5"] },
-      { id: "t8", name: "Événementiel", phaseId: "p3", startDay: 60, duration: 15, status: "upcoming" },
-      { id: "t9", name: "Mesure & reporting", phaseId: "p4", startDay: 80, duration: 15, status: "upcoming", dependsOn: ["t6", "t7"] },
-      { id: "t10", name: "Rapport final", phaseId: "p4", startDay: 95, duration: 10, status: "upcoming", deliverable: "Rapport évaluation", isDeliverable: true, dependsOn: ["t9"] },
+      { name: "Préparation", tasks: [
+        { name: "Cadrage dispositif", duration: 15 },
+        { name: "Plan de concertation", duration: 10, deliverable: "Plan de concertation" },
+      ]},
+      { name: "Information", tasks: [
+        { name: "Supports d'information", duration: 15 },
+        { name: "Réunion publique d'info", duration: 3, isMilestone: true },
+      ]},
+      { name: "Concertation", tasks: [
+        { name: "Atelier participatif #1", duration: 5 },
+        { name: "Atelier participatif #2", duration: 5 },
+        { name: "Atelier participatif #3", duration: 5 },
+        { name: "Permanence publique", duration: 30 },
+      ]},
+      { name: "Synthèse", tasks: [
+        { name: "Analyse contributions", duration: 20 },
+        { name: "Rapport de synthèse", duration: 15, deliverable: "Rapport de synthèse" },
+      ]},
+      { name: "Bilan", tasks: [
+        { name: "Bilan de concertation", duration: 10, deliverable: "Bilan" },
+      ]},
     ],
   },
   mixte: {
     label: "Mixte (étude + concertation + comm)",
     phases: [
-      { id: "p1", name: "Cadrage", color: "bg-info" },
-      { id: "p2", name: "Diagnostic / Étude", color: "bg-primary" },
-      { id: "p3", name: "Concertation", color: "bg-warning" },
-      { id: "p4", name: "Communication", color: "bg-accent-foreground" },
-      { id: "p5", name: "Synthèse", color: "bg-success" },
-    ],
-    tasks: [
-      { id: "t1", name: "Lancement projet", phaseId: "p1", startDay: 0, duration: 5, status: "upcoming", isMilestone: true },
-      { id: "t2", name: "Note de cadrage", phaseId: "p1", startDay: 5, duration: 10, status: "upcoming", deliverable: "Note de cadrage" },
-      { id: "t3", name: "Diagnostic territorial", phaseId: "p2", startDay: 15, duration: 30, status: "upcoming", dependsOn: ["t2"] },
-      { id: "t4", name: "Enquête terrain", phaseId: "p2", startDay: 30, duration: 25, status: "upcoming" },
-      { id: "t5", name: "Rapport diagnostic", phaseId: "p2", startDay: 55, duration: 10, status: "upcoming", deliverable: "Rapport diagnostic", dependsOn: ["t3", "t4"] },
-      { id: "t6", name: "Ateliers concertation (x3)", phaseId: "p3", startDay: 65, duration: 30, status: "upcoming", dependsOn: ["t5"] },
-      { id: "t7", name: "Réunion publique", phaseId: "p3", startDay: 80, duration: 5, status: "upcoming", isMilestone: true },
-      { id: "t8", name: "Stratégie com", phaseId: "p4", startDay: 70, duration: 15, status: "upcoming" },
-      { id: "t9", name: "Déploiement com", phaseId: "p4", startDay: 85, duration: 20, status: "upcoming", dependsOn: ["t8"] },
-      { id: "t10", name: "Synthèse contributions", phaseId: "p5", startDay: 100, duration: 15, status: "upcoming", dependsOn: ["t6"] },
-      { id: "t11", name: "Rapport final", phaseId: "p5", startDay: 115, duration: 15, status: "upcoming", deliverable: "Rapport final", isDeliverable: true, dependsOn: ["t10", "t9"] },
+      { name: "Cadrage", tasks: [
+        { name: "Lancement projet", duration: 5, isMilestone: true },
+        { name: "Note de cadrage", duration: 10, deliverable: "Note de cadrage" },
+      ]},
+      { name: "Diagnostic / Étude", tasks: [
+        { name: "Diagnostic territorial", duration: 30 },
+        { name: "Enquête terrain", duration: 25 },
+        { name: "Rapport diagnostic", duration: 10, deliverable: "Rapport diagnostic" },
+      ]},
+      { name: "Concertation", tasks: [
+        { name: "Ateliers concertation (x3)", duration: 30 },
+        { name: "Réunion publique", duration: 5, isMilestone: true },
+      ]},
+      { name: "Communication", tasks: [
+        { name: "Stratégie com", duration: 15 },
+        { name: "Déploiement com", duration: 20 },
+      ]},
+      { name: "Synthèse", tasks: [
+        { name: "Synthèse contributions", duration: 15 },
+        { name: "Rapport final", duration: 15, deliverable: "Rapport final" },
+      ]},
     ],
   },
 };
+
+const PHASE_COLORS = [
+  "bg-info", "bg-primary", "bg-warning", "bg-accent-foreground", "bg-success",
+  "bg-destructive", "bg-info/70", "bg-primary/70",
+];
 
 const statusColors: Record<string, string> = {
   done: "bg-success/70",
@@ -158,7 +142,7 @@ const statusColors: Record<string, string> = {
 };
 
 /* ── Helpers ── */
-function addDays(date: Date, days: number) {
+function addDaysToDate(date: Date, days: number) {
   const d = new Date(date);
   d.setDate(d.getDate() + days);
   return d;
@@ -168,35 +152,156 @@ function formatDate(date: Date) {
   return date.toLocaleDateString("fr-FR", { day: "2-digit", month: "short" });
 }
 
-function daysBetween(a: Date, b: Date) {
-  return Math.round((b.getTime() - a.getTime()) / (1000 * 60 * 60 * 24));
+/* ── Task Edit Dialog ── */
+function TaskEditDialog({
+  open,
+  onOpenChange,
+  task,
+  phases,
+  allTasks,
+  onSave,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  task: PlanningTask | null;
+  phases: PlanningPhase[];
+  allTasks: PlanningTask[];
+  onSave: (t: PlanningTask) => void;
+}) {
+  const [form, setForm] = useState<PlanningTask | null>(null);
+
+  const handleOpen = useCallback(() => {
+    if (task) setForm({ ...task });
+  }, [task]);
+
+  // Sync form when task changes
+  if (open && task && (!form || form.id !== task.id)) {
+    setForm({ ...task });
+  }
+
+  if (!form) return null;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[480px]">
+        <DialogHeader>
+          <DialogTitle>{task?.dbId || task?.name ? "Modifier la tâche" : "Nouvelle tâche"}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">Nom</label>
+            <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">Phase</label>
+              <Select value={form.phaseId} onValueChange={(v) => setForm({ ...form, phaseId: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {phases.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">Statut</label>
+              <Select value={form.status} onValueChange={(v: any) => setForm({ ...form, status: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="upcoming">À venir</SelectItem>
+                  <SelectItem value="active">En cours</SelectItem>
+                  <SelectItem value="done">Terminé</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">Jour de début</label>
+              <Input type="number" min={0} value={form.startDay} onChange={(e) => setForm({ ...form, startDay: parseInt(e.target.value) || 0 })} />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">Durée (jours)</label>
+              <Input type="number" min={1} value={form.duration} onChange={(e) => setForm({ ...form, duration: parseInt(e.target.value) || 1 })} />
+            </div>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">Livrable associé</label>
+            <Input value={form.deliverable || ""} onChange={(e) => setForm({ ...form, deliverable: e.target.value || undefined })} placeholder="Optionnel" />
+          </div>
+          <div className="flex items-center gap-6">
+            <label className="flex items-center gap-2 text-sm">
+              <Switch checked={!!form.isMilestone} onCheckedChange={(v) => setForm({ ...form, isMilestone: v })} />
+              Jalon
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <Switch checked={!!form.isDeliverable} onCheckedChange={(v) => setForm({ ...form, isDeliverable: v })} />
+              Livrable clé
+            </label>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">Dépendances</label>
+            <div className="flex flex-wrap gap-1.5 mt-1">
+              {allTasks.filter((t) => t.id !== form.id).map((t) => {
+                const isSelected = form.dependsOn?.includes(t.id);
+                return (
+                  <Badge
+                    key={t.id}
+                    variant={isSelected ? "default" : "outline"}
+                    className="cursor-pointer text-[10px] transition-colors"
+                    onClick={() => {
+                      const deps = form.dependsOn || [];
+                      setForm({
+                        ...form,
+                        dependsOn: isSelected
+                          ? deps.filter((d) => d !== t.id)
+                          : [...deps, t.id],
+                      });
+                    }}
+                  >
+                    {t.name}
+                  </Badge>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>Annuler</Button>
+          <Button onClick={() => { onSave(form); onOpenChange(false); }}>Enregistrer</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
+/* ── Main Component ── */
 export default function Planning() {
   const navigate = useNavigate();
-  const [selectedTemplate, setSelectedTemplate] = useState("mixte");
-  const [tasks, setTasks] = useState<PlanningTask[]>(TEMPLATES.mixte.tasks);
-  const [phases, setPhases] = useState<Phase[]>(TEMPLATES.mixte.phases);
-  const [startDate, setStartDate] = useState(new Date("2026-03-02"));
-  const [versionName, setVersionName] = useState("v1 — baseline");
-  const [isSaving, setIsSaving] = useState(false);
+  const planning = usePlanningData();
   const [activeTab, setActiveTab] = useState("timeline");
+  const [planningMode, setPlanningMode] = useState<"forward" | "retro">("forward");
+  const [retroEndDate, setRetroEndDate] = useState("");
+  const [editingTask, setEditingTask] = useState<PlanningTask | null>(null);
+  const [taskDialogOpen, setTaskDialogOpen] = useState(false);
+  const [newPhaseName, setNewPhaseName] = useState("");
+  const [editingPhaseId, setEditingPhaseId] = useState<string | null>(null);
+  const [editingPhaseName, setEditingPhaseName] = useState("");
 
-  const [constraints, setConstraints] = useState<Constraint[]>([
-    { id: "c1", type: "end_date", label: "Date de fin imposée", enabled: false, value: "2026-12-15" },
-    { id: "c2", type: "milestone", label: "Jalon : Réunion publique avant S+12", enabled: false, value: "84" },
-    { id: "c3", type: "dependency", label: "Respecter les dépendances", enabled: true, value: "" },
-    { id: "c4", type: "resource", label: "Capacité ressource (nb personnes)", enabled: false, value: "3" },
-  ]);
+  // AI state
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiResponse, setAiResponse] = useState("");
 
   const totalDays = useMemo(() => {
-    if (tasks.length === 0) return 150;
-    return Math.max(...tasks.map((t) => t.startDay + t.duration)) + 10;
-  }, [tasks]);
+    if (planning.tasks.length === 0) return 150;
+    return Math.max(...planning.tasks.map((t) => t.startDay + t.duration)) + 10;
+  }, [planning.tasks]);
 
   const monthHeaders = useMemo(() => {
     const headers: { label: string; startPct: number; widthPct: number }[] = [];
-    let current = new Date(startDate);
+    let current = new Date(planning.startDate);
     let totalProcessed = 0;
     while (totalProcessed < totalDays) {
       const monthStart = totalProcessed;
@@ -213,116 +318,170 @@ export default function Planning() {
       current = new Date(current.getFullYear(), current.getMonth() + 1, 1);
     }
     return headers;
-  }, [startDate, totalDays]);
+  }, [planning.startDate, totalDays]);
 
+  const groupedTasks = useMemo(() => {
+    return planning.phases.map((phase) => ({
+      phase,
+      tasks: planning.tasks.filter((t) => t.phaseId === phase.id),
+    }));
+  }, [planning.phases, planning.tasks]);
+
+  // Apply template
   const applyTemplate = (key: string) => {
     const tpl = TEMPLATES[key];
     if (!tpl) return;
-    setSelectedTemplate(key);
-    setPhases(tpl.phases);
-    setTasks(tpl.tasks);
+
+    const newPhases: PlanningPhase[] = [];
+    const newTasks: PlanningTask[] = [];
+    let currentDay = 0;
+    let prevTaskId: string | undefined;
+
+    tpl.phases.forEach((p, pi) => {
+      const phaseId = crypto.randomUUID();
+      newPhases.push({
+        id: phaseId,
+        name: p.name,
+        color: PHASE_COLORS[pi % PHASE_COLORS.length],
+        orderIndex: pi,
+      });
+
+      p.tasks.forEach((t) => {
+        const taskId = crypto.randomUUID();
+        newTasks.push({
+          id: taskId,
+          name: t.name,
+          phaseId,
+          startDay: currentDay,
+          duration: t.duration,
+          status: "upcoming",
+          deliverable: t.deliverable,
+          isMilestone: t.isMilestone,
+          dependsOn: prevTaskId ? [prevTaskId] : undefined,
+        });
+        currentDay += t.duration;
+        prevTaskId = taskId;
+      });
+    });
+
+    planning.setPhases(newPhases);
+    planning.setTasks(newTasks);
     toast.success(`Template "${tpl.label}" appliqué`);
   };
 
-  const recalculateDates = useCallback(() => {
-    const endDateConstraint = constraints.find((c) => c.type === "end_date" && c.enabled);
-    const depConstraint = constraints.find((c) => c.type === "dependency" && c.enabled);
-    const resourceConstraint = constraints.find((c) => c.type === "resource" && c.enabled);
+  // Handle retroplanning
+  const handleRetroPlanning = () => {
+    if (!retroEndDate) {
+      toast.error("Définissez une date de fin");
+      return;
+    }
+    planning.calculateRetroPlanning(new Date(retroEndDate));
+  };
 
-    let updated = [...tasks];
+  // New task
+  const handleNewTask = (phaseId?: string) => {
+    const phase = phaseId || planning.phases[0]?.id;
+    if (!phase) {
+      toast.error("Créez d'abord une phase");
+      return;
+    }
+    const maxDay = planning.tasks.length > 0
+      ? Math.max(...planning.tasks.filter((t) => t.phaseId === phase).map((t) => t.startDay + t.duration), 0)
+      : 0;
 
-    // Apply dependencies
-    if (depConstraint) {
-      const taskMap = new Map(updated.map((t) => [t.id, t]));
-      const resolved = new Set<string>();
-      const resolve = (t: PlanningTask) => {
-        if (resolved.has(t.id)) return;
-        if (t.dependsOn) {
-          for (const depId of t.dependsOn) {
-            const dep = taskMap.get(depId);
-            if (dep) {
-              resolve(dep);
-              const depEnd = dep.startDay + dep.duration;
-              if (t.startDay < depEnd) {
-                t.startDay = depEnd;
-              }
+    setEditingTask({
+      id: "",
+      name: "Nouvelle tâche",
+      phaseId: phase,
+      startDay: maxDay,
+      duration: 5,
+      status: "upcoming",
+    });
+    setTaskDialogOpen(true);
+  };
+
+  const handleSaveTask = (task: PlanningTask) => {
+    if (task.id && planning.tasks.find((t) => t.id === task.id)) {
+      planning.updateTask(task.id, task);
+    } else {
+      const { id, ...rest } = task;
+      planning.addTask(rest);
+    }
+  };
+
+  // Add phase
+  const handleAddPhase = () => {
+    if (!newPhaseName.trim()) return;
+    planning.addPhase(newPhaseName.trim());
+    setNewPhaseName("");
+    toast.success("Phase ajoutée");
+  };
+
+  // AI submit
+  const handleAISubmit = async () => {
+    if (!aiPrompt.trim()) return;
+    setAiLoading(true);
+    setAiResponse("");
+
+    try {
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/adaptive-planning`;
+      const resp = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({ prompt: aiPrompt.trim() }),
+      });
+
+      if (resp.status === 429) { toast.error("Trop de requêtes."); return; }
+      if (resp.status === 402) { toast.error("Crédits IA insuffisants."); return; }
+      if (!resp.ok || !resp.body) throw new Error("Erreur IA");
+
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let fullText = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        let newlineIndex: number;
+        while ((newlineIndex = buffer.indexOf("\n")) !== -1) {
+          let line = buffer.slice(0, newlineIndex);
+          buffer = buffer.slice(newlineIndex + 1);
+          if (line.endsWith("\r")) line = line.slice(0, -1);
+          if (line.startsWith(":") || line.trim() === "") continue;
+          if (!line.startsWith("data: ")) continue;
+          const jsonStr = line.slice(6).trim();
+          if (jsonStr === "[DONE]") break;
+          try {
+            const parsed = JSON.parse(jsonStr);
+            const content = parsed.choices?.[0]?.delta?.content;
+            if (content) {
+              fullText += content;
+              setAiResponse(fullText);
             }
+          } catch {
+            buffer = line + "\n" + buffer;
+            break;
           }
         }
-        resolved.add(t.id);
-      };
-      updated.forEach(resolve);
-    }
-
-    // Resource leveling (simple: max N tasks in parallel)
-    if (resourceConstraint) {
-      const maxParallel = parseInt(resourceConstraint.value) || 3;
-      updated.sort((a, b) => a.startDay - b.startDay);
-      for (let i = 0; i < updated.length; i++) {
-        const concurrent = updated.filter(
-          (t, j) => j < i && t.startDay + t.duration > updated[i].startDay
-        );
-        if (concurrent.length >= maxParallel) {
-          const earliestEnd = Math.min(...concurrent.map((t) => t.startDay + t.duration));
-          updated[i].startDay = earliestEnd;
-        }
       }
+    } catch (err) {
+      console.error(err);
+      toast.error("Erreur IA");
+    } finally {
+      setAiLoading(false);
+      setAiPrompt("");
     }
-
-    // Compress to end date
-    if (endDateConstraint) {
-      const targetEnd = daysBetween(startDate, new Date(endDateConstraint.value));
-      const currentEnd = Math.max(...updated.map((t) => t.startDay + t.duration));
-      if (currentEnd > targetEnd && currentEnd > 0) {
-        const ratio = targetEnd / currentEnd;
-        updated = updated.map((t) => ({
-          ...t,
-          startDay: Math.round(t.startDay * ratio),
-          duration: Math.max(1, Math.round(t.duration * ratio)),
-        }));
-      }
-    }
-
-    setTasks(updated);
-    toast.success("Dates recalculées avec les contraintes actives");
-  }, [tasks, constraints, startDate]);
-
-  const toggleConstraint = (id: string) => {
-    setConstraints((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, enabled: !c.enabled } : c))
-    );
   };
-
-  const updateConstraintValue = (id: string, value: string) => {
-    setConstraints((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, value } : c))
-    );
-  };
-
-  const handleSave = async () => {
-    setIsSaving(true);
-    await new Promise((r) => setTimeout(r, 1500));
-    setIsSaving(false);
-    toast.success(`ScheduleVersion "${versionName}" enregistrée !`);
-  };
-
-  const constraintIcons: Record<string, React.ElementType> = {
-    end_date: Calendar,
-    milestone: Flag,
-    dependency: Link2,
-    resource: Users,
-  };
-
-  const groupedTasks = useMemo(() => {
-    return phases.map((phase) => ({
-      phase,
-      tasks: tasks.filter((t) => t.phaseId === phase.id),
-    }));
-  }, [phases, tasks]);
 
   return (
     <Layout>
-      <div className="animate-fade-in space-y-6">
+      <div className="animate-fade-in space-y-5">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
@@ -330,325 +489,484 @@ export default function Planning() {
               <CalendarRange className="h-5 w-5 text-primary" />
             </div>
             <div>
-              <h1 className="font-heading text-2xl font-bold">Planning</h1>
+              <h1 className="font-heading text-2xl font-bold">Retroplanning</h1>
               <p className="text-muted-foreground text-sm mt-0.5">
-                Construisez et ajustez votre planning de mission
+                Construisez, ajustez et versionnez votre planning
               </p>
             </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
+            {/* Project selector */}
+            <Select value={planning.projectId || "standalone"} onValueChange={(v) => planning.selectProject(v === "standalone" ? null : v)}>
+              <SelectTrigger className="w-[200px] h-9 text-xs">
+                <FolderKanban className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
+                <SelectValue placeholder="Sans projet" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="standalone">Autonome (sans projet)</SelectItem>
+                {planning.projects.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {/* Mode toggle */}
+            <div className="flex items-center border border-border/50 rounded-lg overflow-hidden">
+              <button
+                onClick={() => setPlanningMode("forward")}
+                className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                  planningMode === "forward" ? "bg-primary text-primary-foreground" : "bg-secondary/30 text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <ArrowRight className="h-3 w-3 inline mr-1" />
+                Forward
+              </button>
+              <button
+                onClick={() => setPlanningMode("retro")}
+                className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                  planningMode === "retro" ? "bg-warning text-warning-foreground" : "bg-secondary/30 text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <ArrowLeft className="h-3 w-3 inline mr-1" />
+                Retro
+              </button>
+            </div>
+
             <Badge variant="outline" className="border-primary/30 text-primary gap-1.5">
               <GitBranch className="h-3.5 w-3.5" />
-              {versionName}
+              {planning.versionName}
             </Badge>
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1.5 text-primary border-primary/30 hover:bg-primary/10"
-              onClick={() => navigate("/planning-ia")}
-            >
-              <Sparkles className="h-3.5 w-3.5" />
-              Ajuster avec IA
-            </Button>
           </div>
         </div>
 
+        {/* Retro mode banner */}
+        {planningMode === "retro" && (
+          <div className="glass-card p-4 glow-border border-warning/30 flex items-center justify-between gap-4 flex-wrap">
+            <div className="flex items-center gap-3">
+              <div className="h-8 w-8 rounded-lg bg-warning/15 flex items-center justify-center">
+                <Undo2 className="h-4 w-4 text-warning" />
+              </div>
+              <div>
+                <p className="text-sm font-medium">Mode Retroplanning</p>
+                <p className="text-xs text-muted-foreground">Définissez la date de fin et le planning sera calculé à rebours</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <div>
+                <label className="text-xs text-muted-foreground block mb-1">Date de fin imposée</label>
+                <input
+                  type="date"
+                  value={retroEndDate}
+                  onChange={(e) => setRetroEndDate(e.target.value)}
+                  className="px-3 py-1.5 text-sm rounded-md bg-secondary/30 border border-border/50 text-foreground focus:outline-none focus:ring-1 focus:ring-warning"
+                />
+              </div>
+              <Button onClick={handleRetroPlanning} className="gap-1.5 bg-warning text-warning-foreground hover:bg-warning/90 mt-4">
+                <RefreshCcw className="h-3.5 w-3.5" />
+                Calculer le retroplanning
+              </Button>
+            </div>
+          </div>
+        )}
+
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid grid-cols-3 w-full max-w-md">
+          <TabsList className="grid grid-cols-4 w-full max-w-lg">
             <TabsTrigger value="timeline" className="text-xs gap-1.5">
               <CalendarRange className="h-3.5 w-3.5" />
-              Timeline
+              Gantt
+            </TabsTrigger>
+            <TabsTrigger value="tasks" className="text-xs gap-1.5">
+              <Edit3 className="h-3.5 w-3.5" />
+              Tâches
             </TabsTrigger>
             <TabsTrigger value="template" className="text-xs gap-1.5">
-              <Plus className="h-3.5 w-3.5" />
-              Template
+              <Copy className="h-3.5 w-3.5" />
+              Templates
             </TabsTrigger>
-            <TabsTrigger value="constraints" className="text-xs gap-1.5">
-              <Settings2 className="h-3.5 w-3.5" />
-              Contraintes
+            <TabsTrigger value="ia" className="text-xs gap-1.5">
+              <Sparkles className="h-3.5 w-3.5" />
+              IA
             </TabsTrigger>
           </TabsList>
 
-          {/* ── Timeline Tab ── */}
+          {/* ── GANTT TAB ── */}
           <TabsContent value="timeline" className="space-y-4">
             <div className="glass-card p-5 overflow-x-auto">
-              {/* Legend */}
               <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
                 <div className="flex items-center gap-2">
                   <span className="font-heading font-semibold text-sm">
-                    Début : {formatDate(startDate)}
+                    Début : {formatDate(planning.startDate)}
                   </span>
-                  <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
+                  <ArrowRight className="h-3.5 w-3.5 text-muted-foreground/50" />
                   <span className="text-sm text-muted-foreground">
-                    Fin : {formatDate(addDays(startDate, totalDays))}
+                    Fin : {formatDate(addDaysToDate(planning.startDate, totalDays))}
                   </span>
                   <span className="text-xs text-muted-foreground">({totalDays} jours)</span>
                 </div>
                 <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                  <div className="flex items-center gap-1.5">
-                    <div className="h-2.5 w-2.5 rounded-sm bg-success/70" />
-                    Terminé
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <div className="h-2.5 w-2.5 rounded-sm bg-primary" />
-                    En cours
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <div className="h-2.5 w-2.5 rounded-sm bg-muted-foreground/30" />
-                    À venir
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <Flag className="h-3 w-3 text-warning" />
-                    Jalon
-                  </div>
+                  <div className="flex items-center gap-1.5"><div className="h-2.5 w-2.5 rounded-sm bg-success/70" /> Terminé</div>
+                  <div className="flex items-center gap-1.5"><div className="h-2.5 w-2.5 rounded-sm bg-primary" /> En cours</div>
+                  <div className="flex items-center gap-1.5"><div className="h-2.5 w-2.5 rounded-sm bg-muted-foreground/30" /> À venir</div>
+                  <div className="flex items-center gap-1.5"><Flag className="h-3 w-3 text-warning" /> Jalon</div>
                 </div>
               </div>
 
-              <div className="min-w-[800px]">
-                {/* Month headers */}
-                <div className="relative h-6 mb-2 border-b border-border/50">
-                  {monthHeaders.map((mh, i) => (
-                    <div
-                      key={i}
-                      className="absolute top-0 text-[10px] text-muted-foreground font-medium text-center border-l border-border/30 pl-1"
-                      style={{ left: `${200 + ((mh.startPct / 100) * (100 - 20))}%`.replace(/^/, ''), width: `${mh.widthPct * 0.8}%` }}
-                    >
-                      {mh.label}
-                    </div>
-                  ))}
+              {planning.tasks.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+                  <CalendarRange className="h-12 w-12 mb-3 opacity-30" />
+                  <p className="text-sm font-medium mb-1">Aucune tâche dans le planning</p>
+                  <p className="text-xs mb-4">Commencez par un template ou ajoutez des tâches manuellement</p>
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="outline" onClick={() => setActiveTab("template")} className="gap-1.5 text-xs">
+                      <Copy className="h-3.5 w-3.5" /> Template
+                    </Button>
+                    <Button size="sm" onClick={() => setActiveTab("tasks")} className="gap-1.5 text-xs">
+                      <Plus className="h-3.5 w-3.5" /> Ajouter manuellement
+                    </Button>
+                  </div>
                 </div>
-
-                {/* Task rows grouped by phase */}
-                {groupedTasks.map(({ phase, tasks: phaseTasks }) => (
-                  <div key={phase.id} className="mb-1">
-                    {/* Phase header */}
-                    <div className="grid grid-cols-[200px_1fr] items-center py-1.5 bg-secondary/20 rounded-t px-1">
-                      <div className="flex items-center gap-2">
-                        <div className={`h-3 w-3 rounded-sm ${phase.color}`} />
-                        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                          {phase.name}
-                        </span>
-                      </div>
-                      <div className="relative h-5">
-                        {/* Phase bar */}
-                        {phaseTasks.length > 0 && (
-                          <div
-                            className={`absolute top-0.5 h-4 rounded ${phase.color} opacity-20`}
-                            style={{
-                              left: `${(Math.min(...phaseTasks.map((t) => t.startDay)) / totalDays) * 100}%`,
-                              width: `${((Math.max(...phaseTasks.map((t) => t.startDay + t.duration)) - Math.min(...phaseTasks.map((t) => t.startDay))) / totalDays) * 100}%`,
-                            }}
-                          />
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Tasks */}
-                    {phaseTasks.map((task) => (
+              ) : (
+                <div className="min-w-[800px]">
+                  {/* Month headers */}
+                  <div className="relative h-6 mb-2 border-b border-border/50">
+                    {monthHeaders.map((mh, i) => (
                       <div
-                        key={task.id}
-                        className="grid grid-cols-[200px_1fr] items-center py-1 group hover:bg-secondary/10 rounded transition-colors"
+                        key={i}
+                        className="absolute top-0 text-[10px] text-muted-foreground font-medium text-center border-l border-border/30 pl-1"
+                        style={{ left: `${200 + (mh.startPct / 100) * (800 - 200)}px`, width: `${(mh.widthPct / 100) * (800 - 200)}px` }}
                       >
-                        <div className="pr-3 min-w-0 flex items-center gap-1.5 pl-5">
-                          {task.isMilestone && <Flag className="h-3 w-3 text-warning shrink-0" />}
-                          {task.isDeliverable && <Lock className="h-3 w-3 text-primary shrink-0" />}
-                          <p className="text-xs truncate">{task.name}</p>
-                        </div>
-                        <div className="relative h-6">
-                          {/* Grid lines */}
-                          {monthHeaders.map((mh, mi) => (
-                            <div
-                              key={mi}
-                              className="absolute top-0 h-full border-l border-border/10"
-                              style={{ left: `${(mh.startPct / 100) * 100}%` }}
-                            />
-                          ))}
-                          {/* Task bar */}
-                          {task.isMilestone ? (
-                            <div
-                              className="absolute top-1 h-4 w-4 rotate-45 bg-warning border-2 border-background"
-                              style={{
-                                left: `${(task.startDay / totalDays) * 100}%`,
-                              }}
-                            />
-                          ) : (
-                            <div
-                              className={`absolute top-1 h-4 rounded-sm ${statusColors[task.status]} transition-all group-hover:opacity-80 flex items-center justify-end pr-1`}
-                              style={{
-                                left: `${(task.startDay / totalDays) * 100}%`,
-                                width: `${Math.max((task.duration / totalDays) * 100, 0.5)}%`,
-                              }}
-                            >
-                              {task.deliverable && (
-                                <span className="text-[8px] text-background font-medium truncate">
-                                  {task.duration >= 10 ? task.deliverable : ""}
-                                </span>
-                              )}
-                            </div>
-                          )}
-                          {/* Duration label */}
-                          <span
-                            className="absolute top-0.5 text-[9px] text-muted-foreground"
-                            style={{
-                              left: `${((task.startDay + task.duration) / totalDays) * 100 + 0.5}%`,
-                            }}
-                          >
-                            {task.duration}j
-                          </span>
-                        </div>
+                        {mh.label}
                       </div>
                     ))}
                   </div>
+
+                  {groupedTasks.map(({ phase, tasks: phaseTasks }) => (
+                    <div key={phase.id} className="mb-1">
+                      <div className="grid grid-cols-[200px_1fr] items-center py-1.5 bg-secondary/20 rounded-t px-1">
+                        <div className="flex items-center gap-2">
+                          <div className={`h-3 w-3 rounded-sm ${phase.color}`} />
+                          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{phase.name}</span>
+                        </div>
+                        <div className="relative h-5">
+                          {phaseTasks.length > 0 && (
+                            <div
+                              className={`absolute top-0.5 h-4 rounded ${phase.color} opacity-20`}
+                              style={{
+                                left: `${(Math.min(...phaseTasks.map((t) => t.startDay)) / totalDays) * 100}%`,
+                                width: `${((Math.max(...phaseTasks.map((t) => t.startDay + t.duration)) - Math.min(...phaseTasks.map((t) => t.startDay))) / totalDays) * 100}%`,
+                              }}
+                            />
+                          )}
+                        </div>
+                      </div>
+
+                      {phaseTasks.map((task) => (
+                        <div
+                          key={task.id}
+                          className="grid grid-cols-[200px_1fr] items-center py-1 group hover:bg-secondary/10 rounded transition-colors cursor-pointer"
+                          onClick={() => { setEditingTask(task); setTaskDialogOpen(true); }}
+                        >
+                          <div className="pr-3 min-w-0 flex items-center gap-1.5 pl-5">
+                            {task.isMilestone && <Flag className="h-3 w-3 text-warning shrink-0" />}
+                            {task.isDeliverable && <Lock className="h-3 w-3 text-primary shrink-0" />}
+                            <p className="text-xs truncate">{task.name}</p>
+                          </div>
+                          <div className="relative h-6">
+                            {monthHeaders.map((mh, mi) => (
+                              <div key={mi} className="absolute top-0 h-full border-l border-border/10" style={{ left: `${(mh.startPct / 100) * 100}%` }} />
+                            ))}
+                            {task.isMilestone ? (
+                              <div
+                                className="absolute top-1 h-4 w-4 rotate-45 bg-warning border-2 border-background"
+                                style={{ left: `${(task.startDay / totalDays) * 100}%` }}
+                              />
+                            ) : (
+                              <div
+                                className={`absolute top-1 h-4 rounded-sm ${statusColors[task.status]} transition-all group-hover:opacity-80 flex items-center justify-end pr-1`}
+                                style={{
+                                  left: `${(task.startDay / totalDays) * 100}%`,
+                                  width: `${Math.max((task.duration / totalDays) * 100, 0.5)}%`,
+                                }}
+                              >
+                                {task.deliverable && (
+                                  <span className="text-[8px] text-background font-medium truncate">
+                                    {task.duration >= 10 ? task.deliverable : ""}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                            <span
+                              className="absolute top-0.5 text-[9px] text-muted-foreground"
+                              style={{ left: `${((task.startDay + task.duration) / totalDays) * 100 + 0.5}%` }}
+                            >
+                              {task.duration}j
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Save bar */}
+            {planning.tasks.length > 0 && (
+              <div className="glass-card p-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <input
+                    type="text"
+                    value={planning.versionName}
+                    onChange={(e) => planning.setVersionName(e.target.value)}
+                    className="px-3 py-1.5 text-sm rounded-md bg-secondary/30 border border-border/50 text-foreground w-[200px] focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                  <span className="text-xs text-muted-foreground">{planning.tasks.length} tâches · {planning.phases.length} phases</span>
+                </div>
+                <div className="flex gap-2">
+                  {planningMode === "forward" && (
+                    <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={planning.calculateForwardPlanning}>
+                      <RefreshCcw className="h-3.5 w-3.5" /> Recalculer
+                    </Button>
+                  )}
+                  <Button onClick={planning.savePlanning} disabled={planning.isSaving || !planning.projectId} className="gap-2">
+                    {planning.isSaving ? (
+                      <><Loader2 className="h-4 w-4 animate-spin" /> Sauvegarde…</>
+                    ) : (
+                      <><Save className="h-4 w-4" /> Sauvegarder</>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </TabsContent>
+
+          {/* ── TASKS TAB (Manual editing) ── */}
+          <TabsContent value="tasks" className="space-y-4">
+            {/* Phases management */}
+            <div className="glass-card p-5">
+              <h2 className="font-heading text-sm font-semibold mb-3 flex items-center gap-2">
+                <Settings2 className="h-4 w-4 text-primary" />
+                Phases
+              </h2>
+              <div className="space-y-2 mb-3">
+                {planning.phases.map((p) => (
+                  <div key={p.id} className="flex items-center gap-2 p-2 rounded-lg bg-secondary/20 group">
+                    <div className={`h-3 w-3 rounded-sm ${p.color} shrink-0`} />
+                    {editingPhaseId === p.id ? (
+                      <Input
+                        value={editingPhaseName}
+                        onChange={(e) => setEditingPhaseName(e.target.value)}
+                        onBlur={() => { planning.updatePhase(p.id, { name: editingPhaseName }); setEditingPhaseId(null); }}
+                        onKeyDown={(e) => { if (e.key === "Enter") { planning.updatePhase(p.id, { name: editingPhaseName }); setEditingPhaseId(null); } }}
+                        className="h-7 text-xs flex-1"
+                        autoFocus
+                      />
+                    ) : (
+                      <span className="text-sm flex-1">{p.name}</span>
+                    )}
+                    <span className="text-[10px] text-muted-foreground">
+                      {planning.tasks.filter((t) => t.phaseId === p.id).length} tâches
+                    </span>
+                    <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100" onClick={() => { setEditingPhaseId(p.id); setEditingPhaseName(p.name); }}>
+                      <Edit3 className="h-3 w-3" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100 text-destructive" onClick={() => planning.deletePhase(p.id)}>
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>
                 ))}
+              </div>
+              <div className="flex gap-2">
+                <Input value={newPhaseName} onChange={(e) => setNewPhaseName(e.target.value)} placeholder="Nom de la nouvelle phase" className="h-8 text-xs" onKeyDown={(e) => { if (e.key === "Enter") handleAddPhase(); }} />
+                <Button size="sm" onClick={handleAddPhase} disabled={!newPhaseName.trim()} className="gap-1.5 text-xs shrink-0">
+                  <Plus className="h-3.5 w-3.5" /> Ajouter
+                </Button>
               </div>
             </div>
 
-            {/* Save */}
-            <div className="glass-card p-4 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <input
-                  type="text"
-                  value={versionName}
-                  onChange={(e) => setVersionName(e.target.value)}
-                  className="px-3 py-1.5 text-sm rounded-md bg-secondary/30 border border-border/50 text-foreground w-[200px] focus:outline-none focus:ring-1 focus:ring-primary"
-                />
-                <span className="text-xs text-muted-foreground">{tasks.length} tâches · {phases.length} phases</span>
+            {/* Tasks list by phase */}
+            <div className="glass-card p-5">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="font-heading text-sm font-semibold flex items-center gap-2">
+                  <Edit3 className="h-4 w-4 text-primary" />
+                  Tâches ({planning.tasks.length})
+                </h2>
+                <Button size="sm" onClick={() => handleNewTask()} className="gap-1.5 text-xs" disabled={planning.phases.length === 0}>
+                  <Plus className="h-3.5 w-3.5" /> Nouvelle tâche
+                </Button>
               </div>
-              <Button onClick={handleSave} disabled={isSaving} className="gap-2">
-                {isSaving ? (
-                  <><Loader2 className="h-4 w-4 animate-spin" /> Sauvegarde…</>
-                ) : (
-                  <><Save className="h-4 w-4" /> Enregistrer ScheduleVersion</>
-                )}
-              </Button>
+
+              {planning.phases.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">
+                  Créez d'abord des phases pour organiser vos tâches
+                </p>
+              ) : (
+                <div className="space-y-4">
+                  {groupedTasks.map(({ phase, tasks: phaseTasks }) => (
+                    <div key={phase.id}>
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className={`h-2.5 w-2.5 rounded-sm ${phase.color}`} />
+                        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{phase.name}</span>
+                        <Button variant="ghost" size="icon" className="h-5 w-5 ml-auto" onClick={() => handleNewTask(phase.id)}>
+                          <Plus className="h-3 w-3" />
+                        </Button>
+                      </div>
+                      {phaseTasks.length === 0 ? (
+                        <p className="text-xs text-muted-foreground/50 pl-5 py-1">Aucune tâche</p>
+                      ) : (
+                        <div className="space-y-1">
+                          {phaseTasks.sort((a, b) => a.startDay - b.startDay).map((task) => (
+                            <div
+                              key={task.id}
+                              className="flex items-center gap-3 p-2.5 rounded-lg bg-secondary/10 hover:bg-secondary/20 transition-colors group cursor-pointer"
+                              onClick={() => { setEditingTask(task); setTaskDialogOpen(true); }}
+                            >
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  {task.isMilestone && <Flag className="h-3 w-3 text-warning shrink-0" />}
+                                  <span className="text-sm font-medium truncate">{task.name}</span>
+                                  {task.deliverable && (
+                                    <Badge variant="outline" className="text-[9px] py-0">{task.deliverable}</Badge>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-3 text-xs text-muted-foreground shrink-0">
+                                <span>J{task.startDay}→J{task.startDay + task.duration}</span>
+                                <span>{task.duration}j</span>
+                                <Badge className={`text-[9px] py-0 ${statusColors[task.status]} ${task.status === "upcoming" ? "text-foreground" : "text-background"}`}>
+                                  {task.status === "done" ? "Terminé" : task.status === "active" ? "En cours" : "À venir"}
+                                </Badge>
+                              </div>
+                              <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100 text-destructive shrink-0" onClick={(e) => { e.stopPropagation(); planning.deleteTask(task.id); }}>
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Date settings */}
+            <div className="glass-card p-4 flex items-center gap-4 flex-wrap">
+              <div>
+                <label className="text-xs text-muted-foreground block mb-1">Date de début du projet</label>
+                <input
+                  type="date"
+                  value={planning.startDate.toISOString().split("T")[0]}
+                  onChange={(e) => planning.setStartDate(new Date(e.target.value))}
+                  className="px-3 py-1.5 text-sm rounded-md bg-secondary/30 border border-border/50 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+              <div className="flex items-center gap-2 ml-auto">
+                <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={planning.calculateForwardPlanning}>
+                  <RefreshCcw className="h-3.5 w-3.5" /> Recalculer les dépendances
+                </Button>
+              </div>
             </div>
           </TabsContent>
 
-          {/* ── Template Tab ── */}
+          {/* ── TEMPLATES TAB ── */}
           <TabsContent value="template" className="space-y-4">
             <div className="glass-card p-5">
               <h2 className="font-heading text-sm font-semibold mb-4 flex items-center gap-2">
-                <Plus className="h-4 w-4 text-primary" />
+                <Copy className="h-4 w-4 text-primary" />
                 Générer à partir d'un template
               </h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {Object.entries(TEMPLATES).map(([key, tpl]) => (
                   <div
                     key={key}
                     onClick={() => applyTemplate(key)}
-                    className={`p-4 rounded-lg border cursor-pointer transition-all ${
-                      selectedTemplate === key
-                        ? "border-primary bg-primary/5 glow-border"
-                        : "border-border/50 bg-secondary/20 hover:border-border"
-                    }`}
+                    className="p-4 rounded-lg border cursor-pointer transition-all border-border/50 bg-secondary/20 hover:border-primary/30 hover:bg-primary/5"
                   >
                     <h3 className="text-sm font-medium mb-1">{tpl.label}</h3>
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
                       <span>{tpl.phases.length} phases</span>
                       <span>·</span>
-                      <span>{tpl.tasks.length} tâches</span>
-                      <span>·</span>
-                      <span>{tpl.tasks.filter((t) => t.deliverable).length} livrables</span>
+                      <span>{tpl.phases.reduce((s, p) => s + p.tasks.length, 0)} tâches</span>
                     </div>
                     <div className="flex gap-1 mt-2 flex-wrap">
-                      {tpl.phases.map((p) => (
-                        <Badge key={p.id} variant="outline" className="text-[9px] py-0">
-                          {p.name}
-                        </Badge>
+                      {tpl.phases.map((p, i) => (
+                        <Badge key={i} variant="outline" className="text-[9px] py-0">{p.name}</Badge>
                       ))}
                     </div>
                   </div>
                 ))}
               </div>
-
-              <div className="mt-4 flex items-center gap-3">
-                <label className="text-sm text-muted-foreground">Date de début :</label>
-                <input
-                  type="date"
-                  value={startDate.toISOString().split("T")[0]}
-                  onChange={(e) => setStartDate(new Date(e.target.value))}
-                  className="px-3 py-1.5 text-sm rounded-md bg-secondary/30 border border-border/50 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                />
-              </div>
             </div>
           </TabsContent>
 
-          {/* ── Constraints Tab ── */}
-          <TabsContent value="constraints" className="space-y-4">
-            <div className="glass-card p-5">
-              <h2 className="font-heading text-sm font-semibold mb-4 flex items-center gap-2">
-                <Settings2 className="h-4 w-4 text-primary" />
-                Contraintes de planning
-              </h2>
-
-              <div className="space-y-3">
-                {constraints.map((c) => {
-                  const Icon = constraintIcons[c.type] || Settings2;
-                  return (
-                    <div
-                      key={c.id}
-                      className={`p-4 rounded-lg border transition-colors ${
-                        c.enabled ? "border-primary/30 bg-primary/5" : "border-border/30 bg-secondary/10 opacity-60"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <Icon className={`h-4 w-4 ${c.enabled ? "text-primary" : "text-muted-foreground"}`} />
-                          <span className="text-sm font-medium">{c.label}</span>
-                        </div>
-                        <Switch checked={c.enabled} onCheckedChange={() => toggleConstraint(c.id)} />
-                      </div>
-                      {c.enabled && c.type !== "dependency" && (
-                        <div className="mt-3 pl-7">
-                          {c.type === "end_date" && (
-                            <input
-                              type="date"
-                              value={c.value}
-                              onChange={(e) => updateConstraintValue(c.id, e.target.value)}
-                              className="px-3 py-1.5 text-sm rounded-md bg-secondary/30 border border-border/50 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                            />
-                          )}
-                          {c.type === "milestone" && (
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs text-muted-foreground">Jour max :</span>
-                              <input
-                                type="number"
-                                value={c.value}
-                                onChange={(e) => updateConstraintValue(c.id, e.target.value)}
-                                className="w-20 px-3 py-1.5 text-sm rounded-md bg-secondary/30 border border-border/50 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                              />
-                            </div>
-                          )}
-                          {c.type === "resource" && (
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs text-muted-foreground">Nb personnes :</span>
-                              <input
-                                type="number"
-                                min="1"
-                                max="20"
-                                value={c.value}
-                                onChange={(e) => updateConstraintValue(c.id, e.target.value)}
-                                className="w-20 px-3 py-1.5 text-sm rounded-md bg-secondary/30 border border-border/50 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                              />
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+          {/* ── IA TAB ── */}
+          <TabsContent value="ia" className="space-y-4">
+            {/* AI prompt */}
+            <div className="glass-card p-5 glow-border">
+              <div className="flex items-center gap-2 mb-3">
+                <Bot className="h-4 w-4 text-primary" />
+                <span className="font-heading text-sm font-semibold">Assistant Planning IA</span>
+              </div>
+              <p className="text-xs text-muted-foreground mb-3">
+                Décrivez votre projet, vos contraintes ou demandez des ajustements. L'IA analysera et proposera un planning.
+              </p>
+              <Textarea
+                value={aiPrompt}
+                onChange={(e) => setAiPrompt(e.target.value)}
+                placeholder="Ex : Je dois livrer un rapport d'étude d'impact pour le 15 décembre 2026. Il y a une phase de diagnostic de 2 mois, une enquête terrain, et une concertation publique avec 3 ateliers. Proposez-moi un retroplanning."
+                className="bg-secondary/30 border-border/50 min-h-[100px] text-sm"
+              />
+              <div className="flex justify-end mt-3">
+                <Button onClick={handleAISubmit} disabled={aiLoading || !aiPrompt.trim()} className="gap-2" size="sm">
+                  {aiLoading ? (
+                    <><div className="h-3.5 w-3.5 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" /> Analyse…</>
+                  ) : (
+                    <><Send className="h-3.5 w-3.5" /> Analyser</>
+                  )}
+                </Button>
               </div>
 
-              <div className="flex justify-end mt-4">
-                <Button onClick={recalculateDates} className="gap-2">
-                  <RefreshCcw className="h-4 w-4" />
-                  Recalculer les dates
-                </Button>
+              {aiResponse && (
+                <div className="mt-4 p-4 rounded-lg bg-secondary/30 border border-border/50">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Bot className="h-4 w-4 text-primary" />
+                    <span className="text-xs font-medium text-primary">Proposition IA</span>
+                  </div>
+                  <p className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">{aiResponse}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Workflow visual */}
+            <div className="glass-card p-4">
+              <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground flex-wrap">
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/10 text-primary font-medium">
+                  <Bot className="h-3.5 w-3.5" /> IA propose
+                </div>
+                <ArrowRight className="h-3.5 w-3.5 text-muted-foreground/50" />
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-warning/10 text-warning font-medium">
+                  <Target className="h-3.5 w-3.5" /> Vous ajustez
+                </div>
+                <ArrowRight className="h-3.5 w-3.5 text-muted-foreground/50" />
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-success/10 text-success font-medium">
+                  <GitBranch className="h-3.5 w-3.5" /> App versionne
+                </div>
               </div>
             </div>
           </TabsContent>
         </Tabs>
+
+        {/* Task edit dialog */}
+        <TaskEditDialog
+          open={taskDialogOpen}
+          onOpenChange={setTaskDialogOpen}
+          task={editingTask}
+          phases={planning.phases}
+          allTasks={planning.tasks}
+          onSave={handleSaveTask}
+        />
       </div>
     </Layout>
   );
