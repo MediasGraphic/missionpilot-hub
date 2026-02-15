@@ -293,6 +293,8 @@ export default function Planning() {
   const [aiPrompt, setAiPrompt] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
   const [aiResponse, setAiResponse] = useState("");
+  const [aiMode, setAiMode] = useState<"generate" | "advise">("generate");
+  const [aiPlan, setAiPlan] = useState<{ summary: string; phases: { name: string; tasks: { name: string; duration: number; deliverable?: string }[] }[] } | null>(null);
 
   const totalDays = useMemo(() => {
     if (planning.tasks.length === 0) return 150;
@@ -422,61 +424,93 @@ export default function Planning() {
     if (!aiPrompt.trim()) return;
     setAiLoading(true);
     setAiResponse("");
+    setAiPlan(null);
 
     try {
       const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/adaptive-planning`;
-      const resp = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-        },
-        body: JSON.stringify({ prompt: aiPrompt.trim() }),
-      });
 
-      if (resp.status === 429) { toast.error("Trop de requêtes."); return; }
-      if (resp.status === 402) { toast.error("Crédits IA insuffisants."); return; }
-      if (!resp.ok || !resp.body) throw new Error("Erreur IA");
+      if (aiMode === "generate") {
+        // Structured generation (non-streaming)
+        const resp = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          },
+          body: JSON.stringify({ prompt: aiPrompt.trim(), mode: "generate" }),
+        });
 
-      const reader = resp.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      let fullText = "";
+        if (resp.status === 429) { toast.error("Trop de requêtes, réessayez dans quelques instants."); return; }
+        if (resp.status === 402) { toast.error("Crédits IA insuffisants."); return; }
+        if (!resp.ok) throw new Error("Erreur IA");
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
+        const data = await resp.json();
+        if (data.error) throw new Error(data.error);
+        setAiPlan(data);
+        toast.success("Planning généré par l'IA !");
+      } else {
+        // Streaming advice
+        const resp = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          },
+          body: JSON.stringify({ prompt: aiPrompt.trim() }),
+        });
 
-        let newlineIndex: number;
-        while ((newlineIndex = buffer.indexOf("\n")) !== -1) {
-          let line = buffer.slice(0, newlineIndex);
-          buffer = buffer.slice(newlineIndex + 1);
-          if (line.endsWith("\r")) line = line.slice(0, -1);
-          if (line.startsWith(":") || line.trim() === "") continue;
-          if (!line.startsWith("data: ")) continue;
-          const jsonStr = line.slice(6).trim();
-          if (jsonStr === "[DONE]") break;
-          try {
-            const parsed = JSON.parse(jsonStr);
-            const content = parsed.choices?.[0]?.delta?.content;
-            if (content) {
-              fullText += content;
-              setAiResponse(fullText);
+        if (resp.status === 429) { toast.error("Trop de requêtes."); return; }
+        if (resp.status === 402) { toast.error("Crédits IA insuffisants."); return; }
+        if (!resp.ok || !resp.body) throw new Error("Erreur IA");
+
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let fullText = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+
+          let newlineIndex: number;
+          while ((newlineIndex = buffer.indexOf("\n")) !== -1) {
+            let line = buffer.slice(0, newlineIndex);
+            buffer = buffer.slice(newlineIndex + 1);
+            if (line.endsWith("\r")) line = line.slice(0, -1);
+            if (line.startsWith(":") || line.trim() === "") continue;
+            if (!line.startsWith("data: ")) continue;
+            const jsonStr = line.slice(6).trim();
+            if (jsonStr === "[DONE]") break;
+            try {
+              const parsed = JSON.parse(jsonStr);
+              const content = parsed.choices?.[0]?.delta?.content;
+              if (content) {
+                fullText += content;
+                setAiResponse(fullText);
+              }
+            } catch {
+              buffer = line + "\n" + buffer;
+              break;
             }
-          } catch {
-            buffer = line + "\n" + buffer;
-            break;
           }
         }
       }
     } catch (err) {
       console.error(err);
-      toast.error("Erreur IA");
+      toast.error("Erreur lors de la communication avec l'IA");
     } finally {
       setAiLoading(false);
-      setAiPrompt("");
     }
+  };
+
+  // Import AI plan into the Gantt
+  const handleImportAIPlan = () => {
+    if (!aiPlan) return;
+    planning.importAIPlan(aiPlan.phases);
+    setAiPlan(null);
+    setAiPrompt("");
+    setActiveTab("timeline");
   };
 
   return (
@@ -903,36 +937,125 @@ export default function Planning() {
 
           {/* ── IA TAB ── */}
           <TabsContent value="ia" className="space-y-4">
-            {/* AI prompt */}
+            {/* AI mode selector */}
             <div className="glass-card p-5 glow-border">
               <div className="flex items-center gap-2 mb-3">
                 <Bot className="h-4 w-4 text-primary" />
                 <span className="font-heading text-sm font-semibold">Assistant Planning IA</span>
               </div>
-              <p className="text-xs text-muted-foreground mb-3">
-                Décrivez votre projet, vos contraintes ou demandez des ajustements. L'IA analysera et proposera un planning.
-              </p>
+
+              {/* Mode toggle */}
+              <div className="flex gap-2 mb-4">
+                <button
+                  onClick={() => setAiMode("generate")}
+                  className={`flex-1 p-3 rounded-lg border text-left transition-all ${
+                    aiMode === "generate"
+                      ? "border-primary/50 bg-primary/10"
+                      : "border-border/50 bg-secondary/20 hover:border-border"
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <Sparkles className="h-4 w-4 text-primary" />
+                    <span className="text-sm font-medium">Générer un planning</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    L'IA crée un planning complet (phases + tâches) importable en 1 clic
+                  </p>
+                </button>
+                <button
+                  onClick={() => setAiMode("advise")}
+                  className={`flex-1 p-3 rounded-lg border text-left transition-all ${
+                    aiMode === "advise"
+                      ? "border-primary/50 bg-primary/10"
+                      : "border-border/50 bg-secondary/20 hover:border-border"
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <Bot className="h-4 w-4 text-primary" />
+                    <span className="text-sm font-medium">Conseil & ajustement</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    L'IA analyse votre planning et propose des optimisations
+                  </p>
+                </button>
+              </div>
+
               <Textarea
                 value={aiPrompt}
                 onChange={(e) => setAiPrompt(e.target.value)}
-                placeholder="Ex : Je dois livrer un rapport d'étude d'impact pour le 15 décembre 2026. Il y a une phase de diagnostic de 2 mois, une enquête terrain, et une concertation publique avec 3 ateliers. Proposez-moi un retroplanning."
+                placeholder={
+                  aiMode === "generate"
+                    ? "Ex : Je dois livrer un rapport d'étude d'impact pour le 15 décembre 2026. Il y a une phase de diagnostic de 2 mois, une enquête terrain, et une concertation publique avec 3 ateliers."
+                    : "Ex : Mon planning actuel a 5 phases sur 6 mois, mais le client veut avancer la livraison de 3 semaines. Comment réorganiser ?"
+                }
                 className="bg-secondary/30 border-border/50 min-h-[100px] text-sm"
               />
               <div className="flex justify-end mt-3">
                 <Button onClick={handleAISubmit} disabled={aiLoading || !aiPrompt.trim()} className="gap-2" size="sm">
                   {aiLoading ? (
-                    <><div className="h-3.5 w-3.5 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" /> Analyse…</>
+                    <><div className="h-3.5 w-3.5 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" /> {aiMode === "generate" ? "Génération…" : "Analyse…"}</>
                   ) : (
-                    <><Send className="h-3.5 w-3.5" /> Analyser</>
+                    <><Send className="h-3.5 w-3.5" /> {aiMode === "generate" ? "Générer le planning" : "Analyser"}</>
                   )}
                 </Button>
               </div>
 
-              {aiResponse && (
+              {/* Structured AI plan result */}
+              {aiPlan && (
+                <div className="mt-4 p-4 rounded-lg bg-secondary/30 border border-primary/30">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="h-4 w-4 text-primary" />
+                      <span className="text-sm font-semibold text-primary">Planning généré</span>
+                    </div>
+                    <Button size="sm" onClick={handleImportAIPlan} className="gap-1.5">
+                      <Download className="h-3.5 w-3.5" /> Importer dans le Gantt
+                    </Button>
+                  </div>
+                  <p className="text-sm text-muted-foreground mb-3">{aiPlan.summary}</p>
+                  <div className="space-y-3">
+                    {aiPlan.phases.map((phase, pi) => (
+                      <div key={pi} className="rounded-lg border border-border/50 overflow-hidden">
+                        <div className="flex items-center gap-2 px-3 py-2 bg-secondary/30">
+                          <div className={`h-2.5 w-2.5 rounded-sm ${PHASE_COLORS[pi % PHASE_COLORS.length]}`} />
+                          <span className="text-xs font-semibold uppercase tracking-wider">{phase.name}</span>
+                          <span className="text-[10px] text-muted-foreground ml-auto">
+                            {phase.tasks.reduce((s, t) => s + t.duration, 0)} jours
+                          </span>
+                        </div>
+                        <div className="divide-y divide-border/30">
+                          {phase.tasks.map((task, ti) => (
+                            <div key={ti} className="flex items-center justify-between px-3 py-1.5 text-xs">
+                              <span>{task.name}</span>
+                              <div className="flex items-center gap-2 text-muted-foreground">
+                                {task.deliverable && (
+                                  <Badge variant="outline" className="text-[9px] py-0">{task.deliverable}</Badge>
+                                )}
+                                <span>{task.duration}j</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
+                    <span>
+                      {aiPlan.phases.length} phases · {aiPlan.phases.reduce((s, p) => s + p.tasks.length, 0)} tâches · {aiPlan.phases.reduce((s, p) => s + p.tasks.reduce((ss, t) => ss + t.duration, 0), 0)} jours total
+                    </span>
+                    <Button size="sm" variant="outline" onClick={handleImportAIPlan} className="gap-1.5 text-xs">
+                      <Download className="h-3 w-3" /> Appliquer
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Streaming text advice result */}
+              {aiResponse && !aiPlan && (
                 <div className="mt-4 p-4 rounded-lg bg-secondary/30 border border-border/50">
                   <div className="flex items-center gap-2 mb-2">
                     <Bot className="h-4 w-4 text-primary" />
-                    <span className="text-xs font-medium text-primary">Proposition IA</span>
+                    <span className="text-xs font-medium text-primary">Recommandations IA</span>
                   </div>
                   <p className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">{aiResponse}</p>
                 </div>
