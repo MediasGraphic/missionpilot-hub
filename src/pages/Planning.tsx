@@ -421,24 +421,37 @@ export default function Planning() {
 
   // AI submit
   const handleAISubmit = async () => {
-    if (!aiPrompt.trim()) return;
+    if (!aiPrompt.trim() || aiLoading) return;
     setAiLoading(true);
     setAiResponse("");
     setAiPlan(null);
 
-    try {
-      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/adaptive-planning`;
+    const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/adaptive-planning`;
+    const headers = {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+    };
 
+    const maxRetries = 2;
+
+    const fetchWithRetry = async (body: object, retries = 0): Promise<Response> => {
+      const resp = await fetch(url, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+      });
+      if (resp.status === 429 && retries < maxRetries) {
+        const delay = (retries + 1) * 3000;
+        toast.info(`Rate limit atteint, nouvelle tentative dans ${delay / 1000}s…`);
+        await new Promise((r) => setTimeout(r, delay));
+        return fetchWithRetry(body, retries + 1);
+      }
+      return resp;
+    };
+
+    try {
       if (aiMode === "generate") {
-        // Structured generation (non-streaming)
-        const resp = await fetch(url, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-          },
-          body: JSON.stringify({ prompt: aiPrompt.trim(), mode: "generate" }),
-        });
+        const resp = await fetchWithRetry({ prompt: aiPrompt.trim(), mode: "generate" });
 
         if (resp.status === 429) { toast.error("Trop de requêtes, réessayez dans quelques instants."); return; }
         if (resp.status === 402) { toast.error("Crédits IA insuffisants."); return; }
@@ -449,15 +462,7 @@ export default function Planning() {
         setAiPlan(data);
         toast.success("Planning généré par l'IA !");
       } else {
-        // Streaming advice
-        const resp = await fetch(url, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-          },
-          body: JSON.stringify({ prompt: aiPrompt.trim() }),
-        });
+        const resp = await fetchWithRetry({ prompt: aiPrompt.trim() });
 
         if (resp.status === 429) { toast.error("Trop de requêtes."); return; }
         if (resp.status === 402) { toast.error("Crédits IA insuffisants."); return; }
