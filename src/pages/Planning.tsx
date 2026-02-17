@@ -43,7 +43,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
-import { usePlanningData, type PlanningPhase, type PlanningTask } from "@/hooks/usePlanningData";
+import { usePlanningData, type PlanningPhase, type PlanningTask, type SavedVersion } from "@/hooks/usePlanningData";
 import { supabase } from "@/integrations/supabase/client";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -770,6 +770,50 @@ export default function Planning() {
                       <><Save className="h-4 w-4" /> Sauvegarder</>
                     )}
                   </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Saved versions list */}
+            {planning.projectId && planning.savedVersions.length > 0 && (
+              <div className="glass-card p-4">
+                <h3 className="font-heading text-sm font-semibold mb-3 flex items-center gap-2">
+                  <GitBranch className="h-4 w-4 text-primary" />
+                  Versions sauvegardées ({planning.savedVersions.length})
+                </h3>
+                <div className="space-y-1.5 max-h-[200px] overflow-y-auto">
+                  {planning.savedVersions.map((v) => (
+                    <div
+                      key={v.id}
+                      className="flex items-center justify-between p-2.5 rounded-lg bg-secondary/10 hover:bg-secondary/20 transition-colors group"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <Badge variant="outline" className="text-[10px] py-0 shrink-0">{v.version_name}</Badge>
+                        <span className="text-xs text-muted-foreground truncate">
+                          {v.reason || "—"}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-[10px] text-muted-foreground">
+                          {new Date(v.created_at).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 text-xs gap-1 opacity-0 group-hover:opacity-100"
+                          onClick={() => {
+                            if (planning.projectId) {
+                              planning.loadPlanning(planning.projectId);
+                              planning.setVersionName(v.version_name);
+                              toast.success(`Version "${v.version_name}" rechargée`);
+                            }
+                          }}
+                        >
+                          <RefreshCcw className="h-3 w-3" /> Charger
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}

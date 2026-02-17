@@ -36,6 +36,15 @@ const PHASE_COLORS = [
   "bg-destructive", "bg-info/70", "bg-primary/70",
 ];
 
+export interface SavedVersion {
+  id: string;
+  version_name: string;
+  reason: string | null;
+  created_at: string;
+  project_id: string;
+  project_name?: string;
+}
+
 export function usePlanningData() {
   const [projectId, setProjectId] = useState<string | null>(null);
   const [projects, setProjects] = useState<DBProject[]>([]);
@@ -45,6 +54,7 @@ export function usePlanningData() {
   const [isSaving, setIsSaving] = useState(false);
   const [versionName, setVersionName] = useState("v1 — baseline");
   const [startDate, setStartDate] = useState(new Date());
+  const [savedVersions, setSavedVersions] = useState<SavedVersion[]>([]);
 
   // Load projects
   useEffect(() => {
@@ -56,6 +66,24 @@ export function usePlanningData() {
       .then(({ data }) => {
         if (data) setProjects(data);
       });
+  }, []);
+
+  // Load saved versions for a project
+  const loadVersions = useCallback(async (pid: string) => {
+    const { data } = await supabase
+      .from("schedule_versions")
+      .select("*")
+      .eq("project_id", pid)
+      .order("created_at", { ascending: false });
+    if (data) {
+      setSavedVersions(data.map((v) => ({
+        id: v.id,
+        version_name: v.version_name,
+        reason: v.reason,
+        created_at: v.created_at,
+        project_id: v.project_id,
+      })));
+    }
   }, []);
 
   // Load planning data for selected project
@@ -136,13 +164,15 @@ export function usePlanningData() {
       setProjectId(pid);
       if (pid) {
         loadPlanning(pid);
+        loadVersions(pid);
       } else {
         // Reset to empty for standalone mode
         setPhases([]);
         setTasks([]);
+        setSavedVersions([]);
       }
     },
-    [loadPlanning]
+    [loadPlanning, loadVersions]
   );
 
   // Add phase
@@ -354,13 +384,15 @@ export function usePlanningData() {
       if (vError) throw vError;
 
       toast.success(`Planning "${versionName}" sauvegardé !`);
+      // Refresh versions list
+      if (projectId) loadVersions(projectId);
     } catch (err) {
       console.error("Save error:", err);
       toast.error("Erreur lors de la sauvegarde");
     } finally {
       setIsSaving(false);
     }
-  }, [projectId, phases, tasks, startDate, versionName]);
+  }, [projectId, phases, tasks, startDate, versionName, loadVersions]);
 
   // Import AI-generated planning
   const importAIPlan = useCallback(
@@ -409,6 +441,7 @@ export function usePlanningData() {
     isSaving,
     versionName,
     startDate,
+    savedVersions,
     setStartDate,
     setVersionName,
     selectProject,
@@ -424,5 +457,6 @@ export function usePlanningData() {
     calculateForwardPlanning,
     savePlanning,
     importAIPlan,
+    loadPlanning,
   };
 }
