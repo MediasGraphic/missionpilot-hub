@@ -40,12 +40,15 @@ import {
   Undo2,
   Download,
   FolderKanban,
+  FileText,
+  FileSpreadsheet,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { usePlanningData, type PlanningPhase, type PlanningTask, type SavedVersion } from "@/hooks/usePlanningData";
 import { supabase } from "@/integrations/supabase/client";
 import { Textarea } from "@/components/ui/textarea";
+import { exportPlanningToPDF, exportPlanningToExcel } from "@/lib/planningExport";
 
 /* ── Templates ── */
 const TEMPLATES: Record<string, { label: string; phases: { name: string; tasks: { name: string; duration: number; deliverable?: string; isMilestone?: boolean }[] }[] }> = {
@@ -763,6 +766,46 @@ export default function Planning() {
                   <span className="text-xs text-muted-foreground">{planning.tasks.length} tâches · {planning.phases.length} phases</span>
                 </div>
                 <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5 text-xs"
+                    onClick={() => {
+                      const projectName = planning.projectId
+                        ? planning.projects.find((p) => p.id === planning.projectId)?.name
+                        : undefined;
+                      exportPlanningToPDF({
+                        phases: planning.phases,
+                        tasks: planning.tasks,
+                        startDate: planning.startDate,
+                        versionName: planning.versionName,
+                        projectName,
+                      });
+                      toast.success("PDF exporté !");
+                    }}
+                  >
+                    <FileText className="h-3.5 w-3.5" /> PDF
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5 text-xs"
+                    onClick={() => {
+                      const projectName = planning.projectId
+                        ? planning.projects.find((p) => p.id === planning.projectId)?.name
+                        : undefined;
+                      exportPlanningToExcel({
+                        phases: planning.phases,
+                        tasks: planning.tasks,
+                        startDate: planning.startDate,
+                        versionName: planning.versionName,
+                        projectName,
+                      });
+                      toast.success("Excel exporté !");
+                    }}
+                  >
+                    <FileSpreadsheet className="h-3.5 w-3.5" /> Excel
+                  </Button>
                   {planningMode === "forward" && (
                     <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={planning.calculateForwardPlanning}>
                       <RefreshCcw className="h-3.5 w-3.5" /> Recalculer
