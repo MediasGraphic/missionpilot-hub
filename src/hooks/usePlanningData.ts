@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import type { Tables, TablesInsert } from "@/integrations/supabase/types";
@@ -65,6 +65,7 @@ export function usePlanningData() {
   const [startDate, setStartDate] = useState(new Date());
   const [savedVersions, setSavedVersions] = useState<SavedVersion[]>([]);
   const [allPlannings, setAllPlannings] = useState<AllPlanningEntry[]>([]);
+  const pendingSaveReason = useRef<string | null>(null);
 
   // Load projects and all plannings on mount
   const loadAllPlannings = useCallback(async () => {
@@ -461,6 +462,23 @@ export function usePlanningData() {
     []
   );
 
+  // Request auto-save: sets a pending reason, actual save happens in useEffect
+  const requestAutoSave = useCallback((reason: string) => {
+    pendingSaveReason.current = reason;
+  }, []);
+
+  // Auto-save effect: triggers when phases/tasks change AND a pending save is queued
+  useEffect(() => {
+    if (!pendingSaveReason.current || !projectId || phases.length === 0) return;
+    const reason = pendingSaveReason.current;
+    pendingSaveReason.current = null;
+    // Small delay to ensure state is settled
+    const timer = setTimeout(() => {
+      savePlanning(reason);
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [phases, tasks, projectId, savePlanning]);
+
   return {
     projectId,
     projects,
@@ -487,6 +505,7 @@ export function usePlanningData() {
     calculateForwardPlanning,
     savePlanning,
     importAIPlan,
+    requestAutoSave,
     loadPlanning,
     loadAllPlannings,
   };

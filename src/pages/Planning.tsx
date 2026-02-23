@@ -374,9 +374,9 @@ export default function Planning() {
     planning.setVersionName(`Template — ${tpl.label}`);
     toast.success(`Template "${tpl.label}" appliqué`);
 
-    // Auto-save if project selected
+    // Auto-save if project selected (uses effect-based save after state update)
     if (planning.projectId) {
-      setTimeout(() => planning.savePlanning(`Créé depuis template: ${tpl.label}`), 500);
+      planning.requestAutoSave(`Créé depuis template: ${tpl.label}`);
     }
   };
 
@@ -529,7 +529,7 @@ export default function Planning() {
 
     // Auto-save if project selected
     if (planning.projectId) {
-      setTimeout(() => planning.savePlanning("Créé par IA"), 500);
+      planning.requestAutoSave("Créé par IA");
     }
   };
 
@@ -948,7 +948,17 @@ export default function Planning() {
                       <RefreshCcw className="h-3.5 w-3.5" /> Recalculer
                     </Button>
                   )}
-                  <Button onClick={() => planning.savePlanning()} disabled={planning.isSaving || !planning.projectId} className="gap-2">
+                  <Button
+                    onClick={() => {
+                      if (!planning.projectId) {
+                        toast.error("Sélectionnez un projet avant de sauvegarder");
+                        return;
+                      }
+                      planning.savePlanning();
+                    }}
+                    disabled={planning.isSaving}
+                    className="gap-2"
+                  >
                     {planning.isSaving ? (
                       <><Loader2 className="h-4 w-4 animate-spin" /> Sauvegarde…</>
                     ) : (
