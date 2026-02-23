@@ -45,6 +45,15 @@ export interface SavedVersion {
   project_name?: string;
 }
 
+export interface AllPlanningEntry {
+  id: string;
+  version_name: string;
+  reason: string | null;
+  created_at: string;
+  project_id: string;
+  project_name: string;
+}
+
 export function usePlanningData() {
   const [projectId, setProjectId] = useState<string | null>(null);
   const [projects, setProjects] = useState<DBProject[]>([]);
@@ -55,8 +64,26 @@ export function usePlanningData() {
   const [versionName, setVersionName] = useState("v1 — baseline");
   const [startDate, setStartDate] = useState(new Date());
   const [savedVersions, setSavedVersions] = useState<SavedVersion[]>([]);
+  const [allPlannings, setAllPlannings] = useState<AllPlanningEntry[]>([]);
 
-  // Load projects
+  // Load projects and all plannings on mount
+  const loadAllPlannings = useCallback(async () => {
+    const { data } = await supabase
+      .from("schedule_versions")
+      .select("*, projects(name)")
+      .order("created_at", { ascending: false });
+    if (data) {
+      setAllPlannings(data.map((v: any) => ({
+        id: v.id,
+        version_name: v.version_name,
+        reason: v.reason,
+        created_at: v.created_at,
+        project_id: v.project_id,
+        project_name: v.projects?.name || "Projet inconnu",
+      })));
+    }
+  }, []);
+
   useEffect(() => {
     supabase
       .from("projects")
@@ -66,7 +93,8 @@ export function usePlanningData() {
       .then(({ data }) => {
         if (data) setProjects(data);
       });
-  }, []);
+    loadAllPlannings();
+  }, [loadAllPlannings]);
 
   // Load saved versions for a project
   const loadVersions = useCallback(async (pid: string) => {
@@ -324,7 +352,7 @@ export function usePlanningData() {
   }, [tasks]);
 
   // Save everything to DB
-  const savePlanning = useCallback(async () => {
+  const savePlanning = useCallback(async (reason?: string) => {
     if (!projectId) {
       toast.error("Sélectionnez un projet pour sauvegarder");
       return;
@@ -379,20 +407,21 @@ export function usePlanningData() {
       const { error: vError } = await supabase.from("schedule_versions").insert({
         project_id: projectId,
         version_name: versionName,
-        reason: "Sauvegarde manuelle",
+        reason: reason || "Sauvegarde manuelle",
       });
       if (vError) throw vError;
 
       toast.success(`Planning "${versionName}" sauvegardé !`);
       // Refresh versions list
       if (projectId) loadVersions(projectId);
+      loadAllPlannings();
     } catch (err) {
       console.error("Save error:", err);
       toast.error("Erreur lors de la sauvegarde");
     } finally {
       setIsSaving(false);
     }
-  }, [projectId, phases, tasks, startDate, versionName, loadVersions]);
+  }, [projectId, phases, tasks, startDate, versionName, loadVersions, loadAllPlannings]);
 
   // Import AI-generated planning
   const importAIPlan = useCallback(
@@ -442,6 +471,7 @@ export function usePlanningData() {
     versionName,
     startDate,
     savedVersions,
+    allPlannings,
     setStartDate,
     setVersionName,
     selectProject,
@@ -458,5 +488,6 @@ export function usePlanningData() {
     savePlanning,
     importAIPlan,
     loadPlanning,
+    loadAllPlannings,
   };
 }

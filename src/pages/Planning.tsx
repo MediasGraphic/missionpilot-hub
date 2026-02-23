@@ -45,7 +45,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
-import { usePlanningData, type PlanningPhase, type PlanningTask, type SavedVersion } from "@/hooks/usePlanningData";
+import { usePlanningData, type PlanningPhase, type PlanningTask, type SavedVersion, type AllPlanningEntry } from "@/hooks/usePlanningData";
 import { supabase } from "@/integrations/supabase/client";
 import { Textarea } from "@/components/ui/textarea";
 import { exportPlanningToPDF, exportPlanningToExcel } from "@/lib/planningExport";
@@ -283,7 +283,7 @@ function TaskEditDialog({
 export default function Planning() {
   const navigate = useNavigate();
   const planning = usePlanningData();
-  const [activeTab, setActiveTab] = useState("timeline");
+  const [activeTab, setActiveTab] = useState("plannings");
   const [planningMode, setPlanningMode] = useState<"forward" | "retro">("forward");
   const [retroEndDate, setRetroEndDate] = useState("");
   const [editingTask, setEditingTask] = useState<PlanningTask | null>(null);
@@ -371,7 +371,13 @@ export default function Planning() {
 
     planning.setPhases(newPhases);
     planning.setTasks(newTasks);
+    planning.setVersionName(`Template — ${tpl.label}`);
     toast.success(`Template "${tpl.label}" appliqué`);
+
+    // Auto-save if project selected
+    if (planning.projectId) {
+      setTimeout(() => planning.savePlanning(`Créé depuis template: ${tpl.label}`), 500);
+    }
   };
 
   // Handle retroplanning
@@ -516,9 +522,15 @@ export default function Planning() {
   const handleImportAIPlan = () => {
     if (!aiPlan) return;
     planning.importAIPlan(aiPlan.phases);
+    planning.setVersionName(`IA — ${aiPlan.summary?.slice(0, 40) || "Planning généré"}`);
     setAiPlan(null);
     setAiPrompt("");
     setActiveTab("timeline");
+
+    // Auto-save if project selected
+    if (planning.projectId) {
+      setTimeout(() => planning.savePlanning("Créé par IA"), 500);
+    }
   };
 
   return (
@@ -613,7 +625,11 @@ export default function Planning() {
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid grid-cols-4 w-full max-w-lg">
+          <TabsList className="grid grid-cols-5 w-full max-w-2xl">
+            <TabsTrigger value="plannings" className="text-xs gap-1.5">
+              <FolderKanban className="h-3.5 w-3.5" />
+              Mes plannings
+            </TabsTrigger>
             <TabsTrigger value="timeline" className="text-xs gap-1.5">
               <CalendarRange className="h-3.5 w-3.5" />
               Gantt
@@ -631,6 +647,127 @@ export default function Planning() {
               IA
             </TabsTrigger>
           </TabsList>
+
+          {/* ── MES PLANNINGS TAB ── */}
+          <TabsContent value="plannings" className="space-y-4">
+            <div className="glass-card p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="font-heading text-sm font-semibold flex items-center gap-2">
+                  <FolderKanban className="h-4 w-4 text-primary" />
+                  Tous les plannings sauvegardés ({planning.allPlannings.length})
+                </h2>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={() => setActiveTab("template")}>
+                    <Copy className="h-3.5 w-3.5" /> Nouveau depuis template
+                  </Button>
+                  <Button size="sm" className="gap-1.5 text-xs" onClick={() => setActiveTab("ia")}>
+                    <Sparkles className="h-3.5 w-3.5" /> Nouveau avec IA
+                  </Button>
+                </div>
+              </div>
+
+              {planning.allPlannings.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+                  <CalendarRange className="h-12 w-12 mb-3 opacity-30" />
+                  <p className="text-sm font-medium mb-1">Aucun planning sauvegardé</p>
+                  <p className="text-xs mb-4">Créez un planning depuis un template ou avec l'IA, il sera automatiquement sauvegardé</p>
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="outline" onClick={() => setActiveTab("template")} className="gap-1.5 text-xs">
+                      <Copy className="h-3.5 w-3.5" /> Template
+                    </Button>
+                    <Button size="sm" onClick={() => setActiveTab("ia")} className="gap-1.5 text-xs">
+                      <Sparkles className="h-3.5 w-3.5" /> IA
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {planning.allPlannings.map((entry) => (
+                    <div
+                      key={entry.id}
+                      className="flex items-center justify-between p-3 rounded-lg bg-secondary/10 hover:bg-secondary/20 transition-colors group border border-border/30"
+                    >
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                          <CalendarRange className="h-4 w-4 text-primary" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium truncate">{entry.version_name}</span>
+                            <Badge variant="outline" className="text-[9px] py-0 shrink-0">{entry.project_name}</Badge>
+                          </div>
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <span>{entry.reason || "—"}</span>
+                            <span>·</span>
+                            <span>{new Date(entry.created_at).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs gap-1.5"
+                          onClick={() => {
+                            const projectName = planning.projects.find((p) => p.id === entry.project_id)?.name;
+                            planning.selectProject(entry.project_id);
+                            planning.setVersionName(entry.version_name);
+                            setActiveTab("timeline");
+                            toast.success(`Planning "${entry.version_name}" chargé`);
+                          }}
+                        >
+                          <RefreshCcw className="h-3 w-3" /> Charger
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs gap-1.5"
+                          onClick={() => {
+                            // Load then export PDF
+                            planning.selectProject(entry.project_id);
+                            setTimeout(() => {
+                              const projectName = planning.projects.find((p) => p.id === entry.project_id)?.name;
+                              exportPlanningToPDF({
+                                phases: planning.phases,
+                                tasks: planning.tasks,
+                                startDate: planning.startDate,
+                                versionName: entry.version_name,
+                                projectName,
+                              });
+                              toast.success("PDF exporté !");
+                            }, 800);
+                          }}
+                        >
+                          <FileText className="h-3 w-3" /> PDF
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs gap-1.5"
+                          onClick={() => {
+                            planning.selectProject(entry.project_id);
+                            setTimeout(() => {
+                              const projectName = planning.projects.find((p) => p.id === entry.project_id)?.name;
+                              exportPlanningToExcel({
+                                phases: planning.phases,
+                                tasks: planning.tasks,
+                                startDate: planning.startDate,
+                                versionName: entry.version_name,
+                                projectName,
+                              });
+                              toast.success("Excel exporté !");
+                            }, 800);
+                          }}
+                        >
+                          <FileSpreadsheet className="h-3 w-3" /> Excel
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </TabsContent>
 
           {/* ── GANTT TAB ── */}
           <TabsContent value="timeline" className="space-y-4">
@@ -811,7 +948,7 @@ export default function Planning() {
                       <RefreshCcw className="h-3.5 w-3.5" /> Recalculer
                     </Button>
                   )}
-                  <Button onClick={planning.savePlanning} disabled={planning.isSaving || !planning.projectId} className="gap-2">
+                  <Button onClick={() => planning.savePlanning()} disabled={planning.isSaving || !planning.projectId} className="gap-2">
                     {planning.isSaving ? (
                       <><Loader2 className="h-4 w-4 animate-spin" /> Sauvegarde…</>
                     ) : (
