@@ -1,16 +1,7 @@
 import Layout from "@/components/Layout";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import {
-  FolderKanban,
-  CalendarRange,
-  Package,
-  FileText,
-  TrendingUp,
-  Clock,
-  Users,
-  AlertTriangle,
-} from "lucide-react";
+import { FolderKanban, CalendarRange, Package, FileText, TrendingUp, Clock, Users, AlertTriangle } from "lucide-react";
 
 const stats = [
   { label: "Projets actifs", value: "4", icon: FolderKanban, trend: "+1 ce mois" },
@@ -117,8 +108,8 @@ export default function Dashboard() {
                         project.status === "Finalisation"
                           ? "bg-success/15 text-success border-0"
                           : project.status === "Démarrage"
-                          ? "bg-info/15 text-info border-0"
-                          : "bg-primary/15 text-primary border-0"
+                            ? "bg-info/15 text-info border-0"
+                            : "bg-primary/15 text-primary border-0"
                       }
                     >
                       {project.status}
@@ -160,17 +151,22 @@ export default function Dashboard() {
         </div>
 
         {/* Alerts */}
-        <div className="glass-card p-5 glow-border border-warning/30" style={{ boxShadow: "0 0 20px hsl(38 92% 50% / 0.1)" }}>
+        <div
+          className="glass-card p-5 glow-border border-warning/30"
+          style={{ boxShadow: "0 0 20px hsl(38 92% 50% / 0.1)" }}
+        >
           <div className="flex items-center gap-3 mb-3">
             <AlertTriangle className="h-4 w-4 text-warning" />
             <h2 className="font-heading text-sm font-semibold">Alertes</h2>
           </div>
           <div className="space-y-2 text-sm">
             <p className="text-muted-foreground">
-              <span className="text-warning font-medium">3 livrables</span> approchent leur échéance sans validation client.
+              <span className="text-warning font-medium">3 livrables</span> approchent leur échéance sans validation
+              client.
             </p>
             <p className="text-muted-foreground">
-              Le planning <span className="text-warning font-medium">Mobilité Grand Ouest</span> présente un glissement de 5 jours.
+              Le planning <span className="text-warning font-medium">Mobilité Grand Ouest</span> présente un glissement
+              de 5 jours.
             </p>
           </div>
         </div>
